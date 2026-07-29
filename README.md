@@ -88,7 +88,6 @@ This port modifies or includes code and assets derived from:
 - [Creators-of-Create/Create](https://github.com/Creators-of-Create/Create)
 - [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder)
 - [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel)
-- [ZurrTum/Create Fly](https://www.curseforge.com/minecraft/mc-mods/create-fly)
 - Parts of Fabric item-group code
 - Parts of NeoForge OBJ-model code
 
