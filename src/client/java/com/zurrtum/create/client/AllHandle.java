@@ -3,6 +3,7 @@ package com.zurrtum.create.client;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.zurrtum.create.*;
 import com.zurrtum.create.AllParticleTypes;
+import com.zurrtum.create.api.registry.CreateRegistries;
 import com.zurrtum.create.catnip.animation.LerpedFloat;
 import com.zurrtum.create.catnip.data.Couple;
 import com.zurrtum.create.catnip.data.Pair;
@@ -57,6 +58,7 @@ import com.zurrtum.create.client.foundation.render.PlayerSkyhookRenderer;
 import com.zurrtum.create.client.foundation.utility.CreateLang;
 import com.zurrtum.create.client.foundation.utility.DyeHelper;
 import com.zurrtum.create.client.foundation.utility.ServerSpeedProvider;
+import com.zurrtum.create.foundation.gui.menu.MenuType;
 import com.zurrtum.create.client.infrastructure.config.AllConfigs;
 import com.zurrtum.create.compat.computercraft.AbstractComputerBehaviour;
 import com.zurrtum.create.content.contraptions.AbstractContraptionEntity;
@@ -837,11 +839,16 @@ public class AllHandle extends AllClientHandle {
         if (listener instanceof ClientPacketListener handler) {
             Minecraft mc = Minecraft.getInstance();
             PacketUtils.ensureRunningOnSameThread(packet, handler, mc.packetProcessor());
+            MenuType<?> menu = CreateRegistries.MENU_TYPE.getValue(packet.menu());
+            if (menu == null) {
+                LOGGER.error("Received an unknown Create menu type: {}", packet.menu());
+                return;
+            }
             RegistryFriendlyByteBuf extraData = new RegistryFriendlyByteBuf(
                 Unpooled.wrappedBuffer(packet.data()),
                 handler.registryAccess()
             );
-            AllMenuScreens.open(mc, packet.menu(), packet.id(), packet.name(), extraData);
+            AllMenuScreens.open(mc, menu, packet.id(), packet.name(), extraData);
             extraData.release();
         }
     }

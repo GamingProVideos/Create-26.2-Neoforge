@@ -1,136 +1,102 @@
 <div align="center">
 
-# Create Fly
-[![Supporters](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fshieldsio-patreon.vercel.app%2Fapi%3Fusername%3Dzurrtum%26type%3Dpatrons&style=flat&label=Supporters&color=FF5733)](https://www.patreon.com/cw/ZurrTum)
-[![Discord](https://img.shields.io/discord/1484919833601773629?color=5865F2&label=Discord&style=flat)](https://discord.com/invite/cV2nGWy9eA)
-[![CurseForge](https://img.shields.io/curseforge/dt/1346281?logo=curseforge&label=&suffix=%20&style=flat&color=242629&labelColor=F16436&logoColor=1C1C1C)](https://www.curseforge.com/minecraft/mc-mods/create-fly)
-[![Modrinth](https://img.shields.io/modrinth/dt/create-fly?logo=modrinth&label=&suffix=%20&style=flat&color=242629&labelColor=5CA424&logoColor=1C1C1C)](https://modrinth.com/mod/create-fly)
+# Create for Minecraft 26.2 — NeoForge
+
+An unofficial community port of Create 6.0.10 to Minecraft 26.2 and NeoForge 26.2.0.36-beta.
+
+[![Minecraft](https://img.shields.io/badge/Minecraft-26.2-62B47A?style=flat)](https://www.minecraft.net/)
+[![NeoForge](https://img.shields.io/badge/NeoForge-26.2.0.36--beta-EA5C2B?style=flat)](https://neoforged.net/)
+[![Build](https://img.shields.io/badge/build-Gradle-02303A?style=flat&logo=gradle)](#building-and-running)
 
 </div>
 
-### Higher version Create mod porting to Fabric
-### Download the latest version of Create-Fly:
+> [!IMPORTANT]
+> This is an experimental, unofficial port. It is not affiliated with or supported by the official Create, Flywheel,
+> Ponder, or NeoForge teams. Please report problems to this repository, not to the upstream projects.
 
-https://www.curseforge.com/minecraft/mc-mods/create-fly/files/all?page=1&pageSize=20
+## Project status
 
-### 1. What the project specifically does or adds
+| Component | Version |
+| --- | --- |
+| Minecraft | 26.2 |
+| NeoForge | 26.2.0.36-beta |
+| Create base | 6.0.10 |
+| Port version | 6.0.10-port.1 |
+| Java | 25 |
 
-- This is a Fabric fork of [Create](https://github.com/Creators-of-Create/Create).
-  The official [Create Fabric](https://github.com/Fabricators-of-Create/Create) fork has not released a version 1.21.1
-  or higher. it has been a year since then.
-- Minecraft uses a new rendering method in higher versions: item models use a dedicated rendering folder, rendering uses
-  a rendering pipeline, Entity, BlockEntity and GUI rendering is changed to extract the state first and then render,
-  which requires
-  creating special rendering for GUI elements.
-- Minecraft uses a new data loading method that can capture error messages, which requires a lot of changes to be
-  compatible.
-- The original Fabric fork was ported using Porting-Lib, which actually required implementing many NeoForge features.
-  This project uses a mixin specifically for Create features to make porting easier.
-- The original Fabric fork used a mixed approach to server-side and client-side development, which made it easy for the
-  server to call non-existent client code, leading to errors. This project uses a new code separation mode for
-  development.
-- The original Fabric fork used a builder to generate data, which relied on Registrate-Refabricated and made migration
-  difficult. This project registers data in a way that's more consistent with vanilla Minecraft.
-- This project implements the full Create feature independently, without the need to install the Fabric API.
+The current Gradle configuration builds a **NeoForge JAR only**. Fabric-related source and metadata are retained where
+useful for future loader work, but they are excluded from the current NeoForge build and are not a supported Fabric
+release.
 
-### 2. Why someone should want to download the project
+## What this port provides
 
-- Minecraft will always release new versions, and old versions will always become obsolete. If they cannot be ported in
-  time, the accumulated modifications will be huge.
-- This project can provide higher version Create content that does not exist in the original Fabric fork.
+- Create gameplay and assets updated for Minecraft 26.2.
+- NeoForge registration, events, attachments, networking, and run configuration updates.
+- Rendering updates for newer Minecraft item, entity, block-entity, GUI, and render-pipeline APIs.
+- Included porting work for the Create integrations with Flywheel and Ponder.
+- Compatibility source for supported recipe-viewer integrations where available.
 
-### 3. Any other critical information the user must know before downloading
+The goal is to preserve upstream Create behavior as closely as the current Minecraft and NeoForge APIs allow. Some
+features may still need additional testing or fixes.
 
-- Please do not report issues with this mod to simibubi and NeoForge Create.
-- Please do not use old game saves. Because data loading changes, data may be lost.
-- Recommended to use REI or JEI or EIV to view recipes, and please report any game crashes.
-- Using shaders will disable Flywheel optimizations.
+## Before playing
 
-### 4. TODO List
+- Back up every world before testing this port.
+- Do not use an irreplaceable world or assume that a world can safely be moved back to an older Minecraft version.
+- Test complex contraptions, trains, Ponder scenes, shaders, and third-party mod compatibility in a separate world first.
+- Shaders may disable Flywheel optimizations or expose rendering incompatibilities.
+- Include the full crash report and latest log when reporting a problem.
 
-- Create Commands
-- Compat Fabric Events
-- Compat Other Mod
+## Building and running
 
-## This project modifies and includes code from the following projects:
+1. Install a Java 25 JDK.
+2. Open the repository as a Gradle project in IntelliJ IDEA.
+3. Allow Gradle to download the required Minecraft and NeoForge dependencies.
+4. Build the project:
 
-- Engine-Room/Flywheel
-- Engine-Room/Flywheel/Vanillin
-- Creators-of-Create/Create
-- Creators-of-Create/Ponder
-
-### Contains partial code
-
-- fabricMC/fabric ItemGroup
-- neoforged/NeoForge ObjModel
-
-### The license agreement for the open source code used in this project is stored in the licenses directory.
-
-## Modrinth Maven
-
-```gradle
-repositories {
-    exclusiveContent {
-        forRepository {
-            maven {
-                name = "Modrinth"
-                url = "https://api.modrinth.com/maven"
-            }
-        }
-        filter {
-            includeGroup "maven.modrinth"
-        }
-    }
-}
-
-dependencies {
-    // 26.2-rc-2
-    implementation "maven.modrinth:create-fly:26.2-rc-2-6.0.9-1"
-    // 26.1.2
-    implementation "maven.modrinth:create-fly:26.1.2-6.0.9-4"
-    // 1.21.11
-    modImplementation "maven.modrinth:create-fly:1.21.11-6.0.9-5"
-    // 1.21.10
-    modImplementation "maven.modrinth:create-fly:1.21.10-6.0.9-2"
-    // 1.21.8
-    modImplementation "maven.modrinth:create-fly:1.21.8-6.0.9-2"
-}
+```powershell
+.\gradlew.bat clean build
 ```
 
-## Curse Maven
+The compiled JAR is written to `build/libs`.
 
-```gradle
-repositories {
-    exclusiveContent {
-        forRepository {
-            maven {
-                url "https://cursemaven.com"
-            }
-        }
-        filter {
-            includeGroup "curse.maven"
-        }
-    }
-}
+Launch a development client with:
 
-dependencies {
-    // 26.2-rc-2
-    implementation "curse.maven:create-fly-1346281:8245554-sources-8245556"
-    // 26.1.2
-    implementation "curse.maven:create-fly-1346281:8250336-sources-8250341"
-    // 1.21.11
-    modImplementation "curse.maven:create-fly-1346281:7658527-sources-7658535"
-    // 1.21.10
-    modImplementation "curse.maven:create-fly-1346281:7589702-sources-7589709"
-    // 1.21.8
-    modImplementation "curse.maven:create-fly-1346281:7604718-sources-7604724"
-}
+```powershell
+.\gradlew.bat runClient
 ```
 
-### Donate
+Available data-generation runs are named `clientData` and `serverData`; there is no run named `data`.
 
-- Supporting the Project
+## Editing in IntelliJ IDEA
 
-[![patreon](https://oss.zurrtum.com/images/patreon.png)](https://www.patreon.com/cw/ZurrTum)
+- Use the Gradle JVM set to Java 25.
+- Import `build.gradle` rather than opening only the `src` directory.
+- Let the first Gradle sync finish before running or editing generated launch configurations.
+- If generated build output becomes inconsistent, close the development client and run `clean build` again.
 
-[![afdian](https://oss.zurrtum.com/images/afdian.png)](https://afdian.com/a/zurrtum)
+## Downloads and Maven
+
+This repository does not currently publish an official CurseForge, Modrinth, or Maven artifact for this NeoForge port.
+Local development builds are available from `build/libs` after a successful build. Do not use the Create Fly Fabric
+Maven coordinates for this NeoForge project.
+
+## Upstream projects and attribution
+
+This port modifies or includes code and assets derived from:
+
+- [Creators-of-Create/Create](https://github.com/Creators-of-Create/Create)
+- [Creators-of-Create/Ponder](https://github.com/Creators-of-Create/Ponder)
+- [Engine-Room/Flywheel](https://github.com/Engine-Room/Flywheel)
+- [ZurrTum/Create Fly](https://www.curseforge.com/minecraft/mc-mods/create-fly)
+- Parts of Fabric item-group code
+- Parts of NeoForge OBJ-model code
+
+The applicable license notices for included upstream code are stored in the root license file and the `licenses`
+directory. Retain those notices when redistributing modified source or compiled builds.
+
+## Contributing
+
+When submitting a fix, state the Minecraft and NeoForge versions used, describe how to reproduce the problem, and
+include relevant logs. Keep loader-specific code separated so future NeoForge and Fabric work can be maintained without
+mixing client-only code into dedicated-server paths.

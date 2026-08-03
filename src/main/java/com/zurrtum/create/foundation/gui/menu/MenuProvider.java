@@ -1,5 +1,6 @@
 package com.zurrtum.create.foundation.gui.menu;
 
+import com.zurrtum.create.api.registry.CreateRegistries;
 import com.zurrtum.create.infrastructure.packet.s2c.OpenScreenPacket;
 import io.netty.buffer.Unpooled;
 import net.minecraft.ChatFormatting;
@@ -60,7 +61,7 @@ public interface MenuProvider {
             buf.release();
             player.connection.send(new OpenScreenPacket(
                 menu.containerId,
-                menu.getMenuType(),
+                CreateRegistries.MENU_TYPE.getKey(menu.getMenuType()),
                 provider.getDisplayName(),
                 data
             ));
