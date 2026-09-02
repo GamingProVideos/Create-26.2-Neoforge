@@ -52,3 +52,8 @@ registered run type in this version.
 - The complete `build` task passes.
 - The NeoForge development client reaches the title screen and loads Create
   textures, shaders, sounds, models, and data.
+
+
+## Port.11 - early ItemStack-safe Create menu
+
+Minecraft 26.2 binds item data-component prototypes during world/data loading. The title screen exists before that point, so constructing `AllItems.GOGGLES.getDefaultInstance()` from the Create menu button caused `NullPointerException: Components not bound yet`. The title/pause Create button and the title-accessible goggle overlay editor now blit `textures/item/goggles.png` directly and do not create an `ItemStack`.

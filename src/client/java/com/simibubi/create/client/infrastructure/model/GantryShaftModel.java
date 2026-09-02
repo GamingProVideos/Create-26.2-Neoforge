@@ -15,6 +15,12 @@ public class GantryShaftModel extends WrapperBlockStateModel {
     }
 
     @Override
+    public void collectParts(RandomSource random, List<BlockStateModelPart> parts) {
+        // Keep direct chunk-model collection empty; animated gantry geometry is
+        // supplied through Create's renderer/visual path.
+    }
+
+    @Override
     public void addPartsWithInfo(
         BlockAndTintGetter world,
         BlockPos pos,

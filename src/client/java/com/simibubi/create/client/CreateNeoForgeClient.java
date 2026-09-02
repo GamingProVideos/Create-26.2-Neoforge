@@ -38,27 +38,38 @@ import com.simibubi.create.client.foundation.gui.render.SawRenderState;
 import com.simibubi.create.client.foundation.gui.render.SawRenderer;
 import com.simibubi.create.client.foundation.gui.render.SpoutRenderState;
 import com.simibubi.create.client.foundation.gui.render.SpoutRenderer;
+import com.simibubi.create.client.infrastructure.gui.CreateConfigScreen;
+import com.simibubi.create.client.infrastructure.gui.OpenCreateMenuButton;
 import com.simibubi.create.client.ponder.foundation.render.SceneRenderState;
 import com.simibubi.create.client.ponder.foundation.render.SceneRenderer;
 import com.simibubi.create.client.ponder.foundation.render.TitleTextRenderState;
 import com.simibubi.create.client.ponder.foundation.render.TitleTextRenderer;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEvent;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.common.NeoForge;
 import com.simibubi.create.client.ponder.enums.PonderKeybinds;
 
 @Mod(value = com.simibubi.create.Create.MOD_ID, dist = Dist.CLIENT)
 public final class CreateNeoForgeClient {
-    public CreateNeoForgeClient(IEventBus modEventBus) {
+    public CreateNeoForgeClient(IEventBus modEventBus, ModContainer modContainer) {
         // Minecraft 26.2 can begin loading/baking block-state models before the
         // enqueued FMLClientSetup work runs. Register Create's block-model
         // wrappers immediately so kinetic blocks do not keep their static model
         // underneath the animated Flywheel/BER model (the "ghost model" bug).
         AllModels.register();
         AllPartialModels.register();
+
+        // Restore Create's title/pause-menu goggles button and expose the same
+        // configuration screen from NeoForge's Mods list.
+        NeoForge.EVENT_BUS.addListener(OpenCreateMenuButton::onGuiInit);
+        modContainer.registerExtensionPoint(IConfigScreenFactory.class,
+            (container, parent) -> new CreateConfigScreen(parent));
 
         modEventBus.addListener(this::onClientSetup);
         modEventBus.addListener(this::registerKeyMappings);

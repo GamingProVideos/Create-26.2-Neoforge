@@ -2,15 +2,14 @@ package com.simibubi.create.content.logistics.item.filter.attribute;
 
 import com.mojang.serialization.Codec;
 import com.simibubi.create.api.registry.CreateRegistries;
-import com.simibubi.create.api.registry.CreateRegistryKeys;
 import com.simibubi.create.catnip.codecs.CatnipCodecUtils;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.jspecify.annotations.Nullable;
@@ -21,8 +20,28 @@ import java.util.List;
 public interface ItemAttribute {
     Codec<ItemAttribute> CODEC = CreateRegistries.ITEM_ATTRIBUTE_TYPE.byNameCodec()
         .dispatch(ItemAttribute::getType, ItemAttributeType::codec);
-    StreamCodec<RegistryFriendlyByteBuf, ItemAttribute> PACKET_CODEC = ByteBufCodecs.registry(CreateRegistryKeys.ITEM_ATTRIBUTE_TYPE)
+    // Do not use registry integer-ID syncing here: Create's custom built-in registry is not a
+    // NeoForge syncable registry. Encode the stable resource identifier instead.
+    StreamCodec<RegistryFriendlyByteBuf, ItemAttributeType> TYPE_PACKET_CODEC = StreamCodec.of(
+        (buffer, type) -> Identifier.STREAM_CODEC.encode(buffer, getTypeId(type)),
+        buffer -> getTypeById(Identifier.STREAM_CODEC.decode(buffer))
+    );
+    StreamCodec<RegistryFriendlyByteBuf, ItemAttribute> PACKET_CODEC = TYPE_PACKET_CODEC
         .dispatch(ItemAttribute::getType, ItemAttributeType::packetCodec);
+
+    private static ItemAttributeType getTypeById(Identifier id) {
+        ItemAttributeType type = CreateRegistries.ITEM_ATTRIBUTE_TYPE.getValue(id);
+        if (type == null)
+            throw new IllegalArgumentException("Unknown Create item attribute type: " + id);
+        return type;
+    }
+
+    private static Identifier getTypeId(ItemAttributeType type) {
+        Identifier id = CreateRegistries.ITEM_ATTRIBUTE_TYPE.getKey(type);
+        if (id == null)
+            throw new IllegalArgumentException("Unregistered Create item attribute type: " + type);
+        return id;
+    }
 
     static CompoundTag saveStatic(ItemAttribute attribute, HolderLookup.Provider registries) {
         CompoundTag nbt = new CompoundTag();

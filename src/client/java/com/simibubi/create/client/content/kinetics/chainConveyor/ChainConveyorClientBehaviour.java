@@ -3,7 +3,6 @@ package com.simibubi.create.client.content.kinetics.chainConveyor;
 import com.google.common.cache.Cache;
 import com.simibubi.create.catnip.data.WorldAttached;
 import com.simibubi.create.catnip.math.AngleHelper;
-import com.simibubi.create.client.flywheel.api.visualization.VisualizationManager;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBehaviour;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorPackage;
@@ -44,10 +43,17 @@ public class ChainConveyorClientBehaviour extends ChainConveyorBehaviour {
 
     @Override
     public void blockEntityTickBoxVisuals() {
-        // We can use TickableVisuals if flywheel is enabled
-        if (!VisualizationManager.supportsVisualization(blockEntity.getLevel())) {
-            tickBoxVisuals();
-        }
+        // MC/NeoForge 26.2 port: Chain Conveyor is deliberately forced through the
+        // normal block-entity renderer in AllBlockEntityRenders. There is therefore no
+        // ChainConveyorVisual/TickableVisual to advance package physics, even when the
+        // global Flywheel backend reports that visualization is supported.
+        //
+        // If we skip this tick in that situation, ChainConveyorRenderer sees
+        // physicsData.prevPos == null forever and silently omits every travelling box.
+        // The server still moves the package, which makes it look like the package is
+        // packed, enters the chain, and then disappears. Always tick package visuals
+        // here while the conveyor is on the BER path.
+        tickBoxVisuals();
     }
 
     @Override

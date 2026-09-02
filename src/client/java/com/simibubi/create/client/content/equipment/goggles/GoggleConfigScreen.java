@@ -1,20 +1,23 @@
 package com.simibubi.create.client.content.equipment.goggles;
 
-import com.simibubi.create.AllItems;
+import com.simibubi.create.Create;
 import com.simibubi.create.client.catnip.gui.AbstractSimiScreen;
 import com.simibubi.create.client.foundation.utility.CreateLang;
 import com.simibubi.create.client.infrastructure.config.AllConfigs;
 import com.simibubi.create.client.infrastructure.config.CClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
-import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,11 +25,20 @@ import java.util.stream.Collectors;
 
 public class GoggleConfigScreen extends AbstractSimiScreen {
 
+    private static final Identifier GOGGLES_ICON =
+        Identifier.fromNamespaceAndPath(Create.MOD_ID, "textures/item/goggles.png");
+
     private int offsetX;
     private int offsetY;
     private final List<Component> tooltip;
+    private final @Nullable Screen parent;
 
     public GoggleConfigScreen() {
+        this(null);
+    }
+
+    public GoggleConfigScreen(@Nullable Screen parent) {
+        this.parent = parent;
         Component componentSpacing = Component.literal("    ");
         tooltip = new ArrayList<>();
         tooltip.add(componentSpacing.plainCopy().append(CreateLang.translateDirect("gui.config.overlay1")));
@@ -111,7 +123,19 @@ public class GoggleConfigScreen extends AbstractSimiScreen {
             DefaultTooltipPositioner.INSTANCE,
             null
         );
-        ItemStack item = AllItems.GOGGLES.getDefaultInstance();
-        graphics.item(item, posX + 10, posY - 16);
+        // This screen is reachable from the title screen, before 26.2 has bound
+        // item data-component prototypes. Avoid constructing a Create ItemStack
+        // here and draw the goggles texture directly instead.
+        graphics.blit(RenderPipelines.GUI_TEXTURED, GOGGLES_ICON,
+            posX + 10, posY - 16, 0, 0, 16, 16, 16, 16);
     }
+    @Override
+    public void onClose() {
+        if (parent != null) {
+            minecraft.gui.setScreen(parent);
+        } else {
+            super.onClose();
+        }
+    }
+
 }

@@ -31,6 +31,12 @@ public class LargeWaterWheelModel extends WrapperBlockStateModel {
     }
 
     @Override
+    public void collectParts(RandomSource random, List<BlockStateModelPart> parts) {
+        // Never submit the stationary baked wheel. WaterWheelRenderer owns the
+        // visible/spinning wheel on Minecraft 26.2.
+    }
+
+    @Override
     public void addPartsWithInfo(
         BlockAndTintGetter world,
         BlockPos pos,

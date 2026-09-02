@@ -106,6 +106,22 @@ public abstract class ConfigBase {
             return value.get();
         }
 
+        /**
+         * Exposes the backing value to Create's client configuration UI.
+         * The backing value contains range/default metadata that is otherwise
+         * intentionally hidden from normal config consumers.
+         */
+        public @Nullable ConfigValue<V> getRawValue() {
+            return value;
+        }
+
+        public V getDefault() {
+            if (value == null) {
+                throw new AssertionError("Config " + getName() + " was accessed, but not registered before!");
+            }
+            return value.getDefault();
+        }
+
         public void set(V value) {
             if (this.value == null) {
                 throw new AssertionError("Config " + getName() + " was accessed, but not registered before!");

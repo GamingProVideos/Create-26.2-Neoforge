@@ -20,24 +20,43 @@ public class ModelRenderHelper {
     private static final ThreadLocal<ThreadLocalObjects> THREAD_LOCAL_OBJECTS = ThreadLocal.withInitial(
         ModelRenderHelper::createLocalObjects);
 
+    /**
+     * Minecraft 26.2 can ask Create to render block models in GUI picture-in-picture
+     * elements before Flywheel receives its first level-renderer reload callback.
+     * In that window the shared consumers are still null, which crashes the 1.21.1
+     * style Create menu as soon as its animated cogwheels are prepared.
+     *
+     * Initialise lazily on first use so GUI/Ponder/block previews are safe even when
+     * no ClientLevel has been opened yet.
+     */
+    private static synchronized void ensureInitialized() {
+        if (INSTANCE == null || CULL_INSTANCE == null || AO_INSTANCE == null || AO_CULL_INSTANCE == null) {
+            onReloadLevelRenderer();
+        }
+    }
+
     public static ModelConsumer getCullHelper(BufferEmitterOutput output) {
+        ensureInitialized();
         CULL_INSTANCE.updateOutput(output);
         return CULL_INSTANCE;
     }
 
     public static ModelConsumer getHelper(BufferEmitterOutput output) {
+        ensureInitialized();
         INSTANCE.updateOutput(output);
         return INSTANCE;
     }
 
     public static ModelConsumer getAoCullHelper(BufferAoPoseEmitter output) {
-        AO_INSTANCE.updateOutput(output);
-        return CULL_INSTANCE;
+        ensureInitialized();
+        AO_CULL_INSTANCE.updateOutput(output);
+        return AO_CULL_INSTANCE;
     }
 
     public static ModelConsumer getAoHelper(BufferAoPoseEmitter output) {
-        AO_CULL_INSTANCE.updateOutput(output);
-        return INSTANCE;
+        ensureInitialized();
+        AO_INSTANCE.updateOutput(output);
+        return AO_INSTANCE;
     }
 
     public static ModelConsumer getCurrentThreadCullHelper(BufferEmitterOutput output) {

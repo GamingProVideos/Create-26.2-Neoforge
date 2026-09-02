@@ -80,7 +80,15 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
 
     @Override
     protected AABB createRenderBoundingBox() {
-        return new AABB(worldPosition).inflate(connections.isEmpty() ? 3 : 64);
+        // A chain connection can be much longer than 64 blocks. A fixed box causes
+        // Minecraft's block-entity frustum culler to drop the whole conveyor while a
+        // visible part of the chain is still inside the player's render distance.
+        // Keep the cached box tight to the real connection endpoints instead.
+        AABB bounds = new AABB(worldPosition);
+        for (BlockPos connection : connections) {
+            bounds = bounds.minmax(new AABB(worldPosition.offset(connection)));
+        }
+        return bounds.inflate(2.0);
     }
 
     @Override
@@ -133,10 +141,22 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
         float degreesPerTick = speed / (Mth.PI * radius) * 360.0f;
         boolean reversedPreviously = reversed;
 
+        boolean hasPackages = !loopingPackages.isEmpty() || !travellingPackages.isEmpty();
+
+        // Empty, disconnected conveyors do not need any of the logistics/visual work
+        // below. KineticBlockEntity#tick() above has already handled the normal
+        // kinetic bookkeeping.
+        if (connections.isEmpty() && !hasPackages) {
+            return;
+        }
+
         prepareStats();
 
-        if (level.isClientSide()) {
-            getBehaviour(ChainConveyorBehaviour.TYPE).blockEntityTickBoxVisuals();
+        if (level.isClientSide() && hasPackages) {
+            ChainConveyorBehaviour behaviour = getBehaviour(ChainConveyorBehaviour.TYPE);
+            if (behaviour != null) {
+                behaviour.blockEntityTickBoxVisuals();
+            }
         }
 
         if (!level.isClientSide()) {
@@ -153,9 +173,16 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
         }
 
         if (speed == 0) {
-            updateBoxWorldPositions();
+            if (hasPackages) {
+                updateBoxWorldPositions();
+            }
             return;
         }
+
+        // Package transitions used to call notifyUpdate() once per moved/exported
+        // package. That serializes and sends the complete package maps every time.
+        // Batch local changes and send at most one update for this conveyor per tick.
+        boolean packageStateChanged = false;
 
         if (reversedPreviously != reversed) {
             for (Map.Entry<BlockPos, List<ChainConveyorPackage>> entry : travellingPackages.entrySet()) {
@@ -175,7 +202,11 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
                     iterator.remove();
                 }
             }
-            notifyUpdate();
+            if (level.isClientSide()) {
+                notifyUpdate();
+            } else {
+                packageStateChanged = true;
+            }
         }
 
         for (Map.Entry<BlockPos, List<ChainConveyorPackage>> entry : travellingPackages.entrySet()) {
@@ -230,7 +261,7 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
                     }
 
                     iterator.remove();
-                    notifyUpdate();
+                    packageStateChanged = true;
                     continue Travelling;
                 }
 
@@ -243,7 +274,7 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
                     box.chainPosition = wrapAngle(stats.tangentAngle + 180 + 2 * 35 * (reversed ? -1 : 1));
                     clbe.addLoopingPackage(box);
                     iterator.remove();
-                    notifyUpdate();
+                    packageStateChanged = true;
                 }
             }
         }
@@ -286,7 +317,7 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
                 }
 
                 iterator.remove();
-                notifyUpdate();
+                packageStateChanged = true;
                 continue Looping;
             }
 
@@ -305,13 +336,17 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
                 }
 
                 box.chainPosition = 0;
-                addTravellingPackage(box, connection);
+                addTravellingPackage(box, connection, false);
                 iterator.remove();
+                packageStateChanged = true;
                 continue Looping;
             }
         }
 
         updateBoxWorldPositions();
+        if (!level.isClientSide() && packageStateChanged) {
+            notifyUpdate();
+        }
     }
 
     public void removeInvalidConnections() {
@@ -377,14 +412,17 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
     }
 
     public boolean addTravellingPackage(ChainConveyorPackage box, BlockPos connection) {
+        return addTravellingPackage(box, connection, true);
+    }
+
+    private boolean addTravellingPackage(ChainConveyorPackage box, BlockPos connection, boolean notify) {
         if (!connections.contains(connection)) {
             return false;
         }
         travellingPackages.computeIfAbsent(connection, $ -> new ArrayList<>()).add(box);
-        if (level.isClientSide()) {
-            return true;
+        if (!level.isClientSide() && notify) {
+            notifyUpdate();
         }
-        notifyUpdate();
         return true;
     }
 
@@ -475,6 +513,7 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
         BlockPos localTarget = target.subtract(worldPosition);
         boolean added = connections.add(localTarget);
         if (added) {
+            invalidateRenderBoundingBox();
             notifyUpdate();
             calculateConnectionStats(localTarget);
             updateChainShapes();
@@ -520,6 +559,7 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
 
         detachKinetics();
         connections.remove(localTarget);
+        invalidateRenderBoundingBox();
         connectionStats.remove(localTarget);
         List<ChainConveyorPackage> packages = travellingPackages.remove(localTarget);
         if (packages != null) {
@@ -574,6 +614,8 @@ public class ChainConveyorBlockEntity extends KineticBlockEntity implements Tran
         connections.clear();
         travellingPackages.clear();
         loopingPackages.clear();
+        connectionStats = null;
+        invalidateRenderBoundingBox();
     }
 
     @Override

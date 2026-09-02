@@ -17,6 +17,22 @@ public class BracketedKineticBlockModel extends WrapperBlockStateModel {
         super(state, unbaked);
     }
 
+    /**
+     * Minecraft 26.2 has more than one path that can ask a baked block-state model
+     * for its raw parts. The contextual Create hook calls addPartsWithInfo(), but
+     * direct collectParts() calls must never expose the underlying kinetic model in
+     * the world or it will be drawn as a stationary copy underneath the animated
+     * shaft/cog rendered by the block entity visual/renderer.
+     *
+     * Dynamic Create rendering is unaffected: SuperBufferFactory renders these
+     * models through a VirtualBlockGetter, and addPartsWithInfo() deliberately
+     * exposes the wrapped model for that virtual render pass.
+     */
+    @Override
+    public void collectParts(RandomSource random, List<BlockStateModelPart> parts) {
+        // Intentionally empty. The real rotating geometry is rendered by Create.
+    }
+
     @Override
     public void addPartsWithInfo(
         BlockAndTintGetter world,

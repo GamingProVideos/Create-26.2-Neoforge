@@ -16,12 +16,17 @@ java {
     withSourcesJar()
 }
 
-// Keep common and client code as explicit Gradle source sets. Previously the
-// client tree was bolted onto main via srcDir, which allowed the client mixin
-// JSON to reach the production jar while its compiled classes could be absent.
+// Minecraft 26.2 / FML prepares declared mixins very early. Keeping the
+// mixin classes in a separate Gradle `client` source set can leave them outside
+// the class path used during Mixin PREPARE (especially from IDE/dev launches).
+// Compile Create's client Java and resources into the normal `main` output so
+// create.client.mixins.json and every class it names are always in the same
+// mod class path. Client-only classes are still only referenced on the client.
 sourceSets {
     main {
         java {
+            srcDir 'src/client/java'
+
             exclude 'com/simibubi/create/compat/rei/**'
             exclude 'com/simibubi/create/compat/fabric/**'
             exclude 'com/simibubi/create/compat/computercraft/implementation/**'
@@ -40,18 +45,8 @@ sourceSets {
             exclude 'com/simibubi/create/infrastructure/transfer/SidedFluidInventorySlotWrapper.java'
             exclude 'com/simibubi/create/infrastructure/transfer/SidedFluidInventoryStorageImpl.java'
             exclude 'com/simibubi/create/infrastructure/transfer/SingleFluidStackStorage.java'
-        }
-        resources {
-            srcDir 'src/generated/resources'
-            exclude 'fabric.mod.json'
-            exclude 'create.classtweaker'
-            exclude '_data/**'
-        }
-    }
 
-    // Uses the conventional src/client/java and src/client/resources paths.
-    client {
-        java {
+            // NeoForge client exclusions previously applied to sourceSets.client.
             exclude 'com/simibubi/create/client/compat/rei/**'
             exclude 'com/simibubi/create/client/compat/eiv/**'
             exclude 'com/simibubi/create/client/compat/rrv/**'
@@ -73,9 +68,6 @@ sourceSets {
             exclude 'com/simibubi/create/client/mixin/RrvRecipeViewMenuMixin.java'
             exclude 'com/simibubi/create/client/mixin/RrvRecipeViewScreenMixin.java'
             exclude 'com/simibubi/create/client/mixin/ViewTypeButtonMixin.java'
-
-            // Fabric Renderer API adapters are not part of NeoForge. The
-            // Minecraft 26.2-native model/render code remains enabled.
             exclude 'com/simibubi/create/client/flywheel/lib/model/baked/FabricEmitterSupplier.java'
             exclude 'com/simibubi/create/client/flywheel/lib/model/baked/DualVertexConsumer.java'
             exclude 'com/simibubi/create/client/foundation/model/FabricBakedModelHelper.java'
@@ -92,15 +84,14 @@ sourceSets {
             exclude 'com/simibubi/create/client/mixin/WrapperBlockStateModelAccessor.java'
             exclude 'com/simibubi/create/client/mixin/WrapperBlockStateModelMixin.java'
         }
+        resources {
+            srcDir 'src/client/resources'
+            srcDir 'src/generated/resources'
+            exclude 'fabric.mod.json'
+            exclude 'create.classtweaker'
+            exclude '_data/**'
+        }
     }
-}
-
-// Inherit normal project dependencies for the client source set.
-configurations {
-    clientImplementation.extendsFrom implementation
-    clientCompileOnly.extendsFrom compileOnly
-    clientRuntimeOnly.extendsFrom runtimeOnly
-    clientAnnotationProcessor.extendsFrom annotationProcessor
 }
 
 neoForge {
@@ -108,13 +99,9 @@ neoForge {
     accessTransformers = files('src/main/resources/META-INF/accesstransformer.cfg')
     interfaceInjectionData = files('src/main/resources/META-INF/create-injected-interfaces.json')
 
-    // The client source set needs Minecraft/NeoForge on its compile classpath.
-    addModdingDependenciesTo sourceSets.client
-
     mods {
         create {
             sourceSet sourceSets.main
-            sourceSet sourceSets.client
         }
     }
 
@@ -150,9 +137,35 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    // Client classes compile and run against the common Create output.
-    clientImplementation sourceSets.main.output
+// Client sources are intentionally part of sourceSets.main on 26.2, so the
+// normal `classes` task is sufficient for Gradle and IDE launches.
+
+tasks.register('verifyClientMixinDevOutput') {
+    dependsOn tasks.named('classes')
+
+    doLast {
+        def requiredClientClasses = [
+            'com/simibubi/create/client/mixin/MixinPlugin.class',
+            'com/simibubi/create/client/mixin/AbstractClientPlayerMixin.class',
+            'com/simibubi/create/client/mixin/AvatarRendererMixin.class',
+            'com/simibubi/create/client/mixin/BlockStateModelLoaderMixin.class'
+        ]
+
+        requiredClientClasses.each { entry ->
+            boolean present = sourceSets.main.output.classesDirs.files.any { dir ->
+                new File(dir, entry).isFile()
+            }
+            if (!present) {
+                throw new GradleException("Create main dev output is missing required client mixin class: ${entry}")
+            }
+        }
+    }
+}
+
+tasks.matching { task ->
+    task.name == 'runClient' || task.name == 'runClientData' || task.name == 'runGameTestClient'
+}.configureEach {
+    dependsOn tasks.named('verifyClientMixinDevOutput')
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -172,12 +185,8 @@ tasks.named('processResources', ProcessResources) {
 }
 
 tasks.named('jar', Jar) {
-    // java's default jar task only includes main.output. Explicitly merge the
-    // client source-set output so create.client.mixins.json can always resolve
-    // its companion plugin and mixin classes in production.
-    dependsOn tasks.named(sourceSets.client.classesTaskName)
-    from(sourceSets.client.output)
-
+    // Client sources are compiled into main.output, so the default jar already
+    // contains create.client.mixins.json and all companion mixin classes.
     from('LICENSE')
     from('licenses') {
         into 'licenses'
@@ -187,10 +196,6 @@ tasks.named('jar', Jar) {
             'MixinConfigs': 'create.mixins.json,create.client.mixins.json'
         )
     }
-}
-
-tasks.named('sourcesJar', Jar) {
-    from(sourceSets.client.allSource)
 }
 
 // Regression guard for the exact production crash that prompted this change.
@@ -320,9 +325,145 @@ tasks.register('verifyObjKineticTexturePort') {
     }
 }
 
+
+// Verify the Minecraft 26.2 menu/mixin source layout. NeoForge's dev composite
+// validates mixin declarations from neoforge.mods.toml against the main resource
+// root, so create.client.mixins.json must live in src/main/resources.
+tasks.register('verifyClientMenuAndMixinPort') {
+    doLast {
+        def clientMixin = file('src/main/resources/create.client.mixins.json')
+        if (!clientMixin.exists()) {
+            throw new GradleException('create.client.mixins.json must exist in src/main/resources for NeoForge 26.2 dev runs')
+        }
+        if (file('src/client/resources/create.client.mixins.json').exists()) {
+            throw new GradleException('create.client.mixins.json must not be left only in src/client/resources')
+        }
+
+        def menuButton = file('src/client/java/com/simibubi/create/client/infrastructure/gui/OpenCreateMenuButton.java').text
+        if (menuButton.contains('super.extractContents(')) {
+            throw new GradleException('OpenCreateMenuButton cannot call abstract Button.extractContents() on Minecraft 26.x')
+        }
+        if (!menuButton.contains('this.extractDefaultSprite(graphics);')) {
+            throw new GradleException('OpenCreateMenuButton must render the vanilla button sprite explicitly')
+        }
+        if (menuButton.contains('AllItems.GOGGLES.getDefaultInstance()') || menuButton.contains('graphics.item(')) {
+            throw new GradleException('Title-screen Create button must not construct/render an ItemStack before 26.2 components are bound')
+        }
+        if (!menuButton.contains('textures/item/goggles.png') || !menuButton.contains('RenderPipelines.GUI_TEXTURED')) {
+            throw new GradleException('OpenCreateMenuButton must use the texture-only goggles icon path')
+        }
+
+        def goggleConfig = file('src/client/java/com/simibubi/create/client/content/equipment/goggles/GoggleConfigScreen.java').text
+        if (goggleConfig.contains('AllItems.GOGGLES.getDefaultInstance()') || goggleConfig.contains('graphics.item(')) {
+            throw new GradleException('GoggleConfigScreen must not construct an ItemStack when opened from the title screen')
+        }
+        if (!goggleConfig.contains('textures/item/goggles.png')) {
+            throw new GradleException('GoggleConfigScreen must render the texture-only goggles icon')
+        }
+
+        def gogglesTexture = file('src/client/resources/assets/create/textures/item/goggles.png')
+        if (!gogglesTexture.exists()) {
+            throw new GradleException('Texture-only title-screen goggles icon is missing')
+        }
+
+        def enUs = file('src/main/resources/assets/create/lang/en_us.json')
+        if (!enUs.exists()) {
+            throw new GradleException('Create en_us.json must be available from the main resource root')
+        }
+    }
+}
+
 tasks.named('build') {
+    dependsOn tasks.named('verifyClientMixinDevOutput')
+    dependsOn tasks.named('verifyClientMenuAndMixinPort')
     dependsOn tasks.named('verifyKineticModelPort')
     dependsOn tasks.named('verifyLivingEntityMixinPort')
     dependsOn tasks.named('verifyCreateJar')
     dependsOn tasks.named('verifyObjKineticTexturePort')
+}
+
+
+// Minecraft 26.2: direct BlockStateModel.collectParts() calls must not expose the
+// stationary baked shaft/cog/wheel underneath Create's animated kinetic renderer.
+tasks.register('verifyKineticGhostModelPort12') {
+    doLast {
+        def bracketed = file('src/client/java/com/simibubi/create/client/infrastructure/model/BracketedKineticBlockModel.java').text
+        if (!bracketed.contains('public void collectParts(RandomSource random, List<BlockStateModelPart> parts)')) {
+            throw new GradleException('BracketedKineticBlockModel is missing the direct collectParts ghost-model guard')
+        }
+        if (!bracketed.contains('Intentionally empty. The real rotating geometry is rendered by Create.')) {
+            throw new GradleException('BracketedKineticBlockModel collectParts guard appears to have been changed')
+        }
+
+        def wheel = file('src/client/java/com/simibubi/create/client/infrastructure/model/LargeWaterWheelModel.java').text
+        if (!wheel.contains('Never submit the stationary baked wheel')) {
+            throw new GradleException('LargeWaterWheelModel is missing the direct collectParts ghost-wheel guard')
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyKineticGhostModelPort12')
+}
+
+// Port.13 regression guard: keep the restored 1.21.1-style Create main menu.
+tasks.register('verifyCreate1211StyleMenu') {
+    doLast {
+        def source = file('src/client/java/com/simibubi/create/client/infrastructure/gui/CreateMainMenuScreen.java').text
+        [
+            'AllBlocks.LARGE_COGWHEEL',
+            'AllBlocks.COGWHEEL',
+            'AllGuiTextures.LOGO',
+            'AllGuiTextures.CURSEFORGE_LOGO',
+            'AllGuiTextures.MODRINTH_LOGO',
+            'menu.configure',
+            'menu.ponder_index',
+            'menu.report_bugs',
+            'menu.support',
+            'menu.return'
+        ].each { token ->
+            if (!source.contains(token)) {
+                throw new GradleException("Create 1.21.1-style menu regression: missing ${token}")
+            }
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyCreate1211StyleMenu')
+}
+
+
+// Minecraft 26.2 GUI block previews can render before Flywheel's first level reload.
+// Keep ModelRenderHelper safe for title-screen Create cogwheel previews.
+tasks.register('verifyGuiModelRenderInitPort') {
+    doLast {
+        def source = file('src/client/java/com/simibubi/create/client/flywheel/lib/model/baked/ModelRenderHelper.java').text
+        if (!source.contains('ensureInitialized()'))
+            throw new GradleException('ModelRenderHelper is missing lazy GUI initialization')
+        if (!source.contains('AO_CULL_INSTANCE.updateOutput(output)') || !source.contains('return AO_CULL_INSTANCE'))
+            throw new GradleException('AO cull helper is wired to the wrong consumer')
+        if (!source.contains('AO_INSTANCE.updateOutput(output)') || !source.contains('return AO_INSTANCE'))
+            throw new GradleException('AO helper is wired to the wrong consumer')
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyGuiModelRenderInitPort')
+}
+
+tasks.register('verifyDualChainConveyorPort') {
+    doLast {
+        def renderer = file('src/client/java/com/simibubi/create/client/content/kinetics/chainConveyor/ChainConveyorRenderer.java').text
+        if (renderer.contains('ownsConnectionSpan('))
+            throw new GradleException('Port 19 regression: single-owner chain-span suppression is still present')
+        if (renderer.contains('renderChain ='))
+            throw new GradleException('Port 19 regression: per-endpoint chain suppression flag is still present')
+        if (!renderer.contains('chain.submit(matrices, state.chain, queue);'))
+            throw new GradleException('Port 19 regression: chain geometry is not submitted')
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyDualChainConveyorPort')
 }

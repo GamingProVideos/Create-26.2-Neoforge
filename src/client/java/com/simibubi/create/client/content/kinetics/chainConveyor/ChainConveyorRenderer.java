@@ -55,6 +55,7 @@ import static com.simibubi.create.client.content.kinetics.base.KineticBlockEntit
 public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorBlockEntity, ChainConveyorRenderState> {
     public static final Identifier CHAIN_LOCATION = Identifier.withDefaultNamespace("textures/block/iron_chain.png");
     public static final int MIP_DISTANCE = 48;
+    private static final double VISIBILITY_PADDING = 8.0;
 
     public ChainConveyorRenderer(Context context) {
     }
@@ -72,6 +73,15 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
         Vec3 cameraPos,
         @Nullable CrumblingOverlay crumblingOverlay
     ) {
+        // Render states are reused by Minecraft 26.2. Clear optional fields so an
+        // empty conveyor cannot accidentally retain geometry/packages from the
+        // previous extraction.
+        state.angle = null;
+        state.model = null;
+        state.guard = null;
+        state.chains = null;
+        state.boxes = null;
+
         Level level = be.getLevel();
         // Do not split this renderer between Flywheel and BER on 26.2. The OBJ-backed
         // conveyor shaft/guard partials are reliable through SuperByteBuffer but can be
@@ -94,10 +104,13 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
             state.guard = CachedBuffers.partial(AllPartialModels.CHAIN_CONVEYOR_GUARD, blockState)
                 .light(state.lightCoords).extractRenderState();
         }
-        List<BoxRenderState> boxes = new ArrayList<>();
+        List<BoxRenderState> boxes = null;
         for (ChainConveyorPackage box : be.getLoopingPackages()) {
             ChainConveyorPackagePhysicsData data = getPhysicsData(level, box);
             if (data != null) {
+                if (boxes == null) {
+                    boxes = new ArrayList<>();
+                }
                 boxes.add(getBoxRenderState(level, cardinalLighting, blockState, blockPos, box, data, tickProgress));
             }
         }
@@ -105,6 +118,9 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
             for (ChainConveyorPackage box : entry.getValue()) {
                 ChainConveyorPackagePhysicsData data = getPhysicsData(level, box);
                 if (data != null) {
+                    if (boxes == null) {
+                        boxes = new ArrayList<>();
+                    }
                     boxes.add(getBoxRenderState(
                         level,
                         cardinalLighting,
@@ -117,10 +133,9 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
                 }
             }
         }
-        if (boxes.isEmpty()) {
-            return;
+        if (boxes != null) {
+            state.boxes = boxes;
         }
-        state.boxes = boxes;
     }
 
     @Override
@@ -143,6 +158,9 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
         if (state.chains != null) {
             if (state.guard != null) {
                 for (ChainRenderState chain : state.chains) {
+                    // A Chain Conveyor connection is a loop with two distinct tangent
+                    // strands. Each endpoint computes/renders one of those strands, so
+                    // both block entities must submit their chain geometry.
                     chain.submit(matrices, state.chain, queue);
                     if (chain.yaw != null) {
                         matrices.pushPose();
@@ -253,24 +271,29 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
             if (stats == null) {
                 continue;
             }
+            BlockPos otherPos = tilePos.offset(blockPos);
             boolean far = renderWorld && !cameraPos.closerThan(
                 Vec3.atCenterOf(tilePos).add(blockPos.getX() / 2.0f, blockPos.getY() / 2.0f, blockPos.getZ() / 2.0f),
                 MIP_DISTANCE
             );
             ChainRenderState state = far ? new FarChainRenderState() : new ChainRenderState();
             Vec3 diff = stats.end().subtract(stats.start());
-            state.startOffset = stats.start().subtract(x, y, z);
             state.yaw = getYRadiansRotateAngle((float) Mth.atan2(diff.x, diff.z));
+
+            // Do not de-duplicate this against the opposite endpoint. calculateConnectionStats()
+            // offsets the start/end tangent by 35 degrees relative to each pulley. The peer
+            // endpoint therefore describes the other side of the conveyor loop, not duplicate
+            // geometry. Rendering only one endpoint produces exactly the single-chain bug.
+            state.startOffset = stats.start().subtract(x, y, z);
             state.pitch = Axis.XP.rotation((float) (Mth.DEG_TO_RAD * (90 - Mth.RAD_TO_DEG * Mth.atan2(
                 diff.y,
                 diff.multiply(1, 0, 1).length()
             ))));
             state.yRot = yRot;
-            BlockPos pos = tilePos.offset(blockPos);
             state.light1 = light1;
             state.light2 = LightCoordsUtil.pack(
-                level.getBrightness(LightLayer.BLOCK, pos),
-                level.getBrightness(LightLayer.SKY, pos)
+                level.getBrightness(LightLayer.BLOCK, otherPos),
+                level.getBrightness(LightLayer.SKY, otherPos)
             );
             state.animation = animation;
             state.length = stats.chainLength();
@@ -446,12 +469,52 @@ public class ChainConveyorRenderer implements BlockEntityRenderer<ChainConveyorB
 
     @Override
     public int getViewDistance() {
-        return 256;
+        // Match the player's actual chunk render distance instead of hard-coding 256.
+        // Vanilla's beacon renderer uses the same 26.2 API pattern.
+        return Math.max(64, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16);
+    }
+
+    @Override
+    public boolean shouldRender(ChainConveyorBlockEntity be, Vec3 cameraPosition) {
+        double distance = getViewDistance() + VISIBILITY_PADDING;
+        double maxDistanceSqr = distance * distance;
+
+        Vec3 blockCenter = Vec3.atCenterOf(be.getBlockPos());
+        if (cameraPosition.distanceToSqr(blockCenter) <= maxDistanceSqr) {
+            return true;
+        }
+
+        // Minecraft normally measures BER distance only from the owning block. Long
+        // conveyors therefore vanished when their endpoint left range even while the
+        // middle of the chain was still visible. Test the actual chain segments too.
+        be.prepareStats();
+        if (be.connectionStats != null) {
+            for (ConnectionStats stats : be.connectionStats.values()) {
+                if (distanceToSegmentSqr(cameraPosition, stats.start(), stats.end()) <= maxDistanceSqr) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static double distanceToSegmentSqr(Vec3 point, Vec3 start, Vec3 end) {
+        Vec3 segment = end.subtract(start);
+        double lengthSqr = segment.lengthSqr();
+        if (lengthSqr < 1.0e-7) {
+            return point.distanceToSqr(start);
+        }
+        double t = point.subtract(start).dot(segment) / lengthSqr;
+        t = Math.max(0.0, Math.min(1.0, t));
+        return point.distanceToSqr(start.add(segment.scale(t)));
     }
 
     @Override
     public boolean shouldRenderOffScreen() {
-        return true;
+        // The block entity now exposes an exact connection-spanning render AABB, so
+        // allow Minecraft's normal frustum culling again. Keeping this true forced
+        // every loaded conveyor in range through extraction even when behind camera.
+        return false;
     }
 
     public static class ChainConveyorRenderState extends BlockEntityRenderState {

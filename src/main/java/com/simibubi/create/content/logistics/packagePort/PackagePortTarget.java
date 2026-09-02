@@ -7,7 +7,6 @@ import com.simibubi.create.AllBlockEntityTypes;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.AllItems;
 import com.simibubi.create.api.registry.CreateRegistries;
-import com.simibubi.create.api.registry.CreateRegistryKeys;
 import com.simibubi.create.catnip.codecs.stream.CatnipStreamCodecBuilders;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity.ConnectedPort;
@@ -19,6 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -32,9 +32,31 @@ import java.util.Optional;
 public abstract class PackagePortTarget {
     public static final Codec<PackagePortTarget> CODEC = CreateRegistries.PACKAGE_PORT_TARGET_TYPE.byNameCodec()
         .dispatch(PackagePortTarget::getType, PackagePortTargetType::codec);
-    public static final StreamCodec<? super RegistryFriendlyByteBuf, PackagePortTarget> PACKET_CODEC = ByteBufCodecs.registry(
-            CreateRegistryKeys.PACKAGE_PORT_TARGET_TYPE)
+    // NeoForge 26.2 only permits ByteBufCodecs.registry(...) for registries that are explicitly
+    // marked as synced. Create's built-in custom registries are intentionally created during
+    // bootstrap, so encode their stable identifiers instead of registry integer IDs. This keeps
+    // package-port networking compatible without requiring registry remapping/sync metadata.
+    private static final StreamCodec<RegistryFriendlyByteBuf, PackagePortTargetType> TYPE_PACKET_CODEC = StreamCodec.of(
+        (buffer, type) -> Identifier.STREAM_CODEC.encode(buffer, getTypeId(type)),
+        buffer -> getTypeById(Identifier.STREAM_CODEC.decode(buffer))
+    );
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, PackagePortTarget> PACKET_CODEC = TYPE_PACKET_CODEC
         .dispatch(PackagePortTarget::getType, PackagePortTargetType::packetCodec);
+
+    private static PackagePortTargetType getTypeById(Identifier id) {
+        PackagePortTargetType type = CreateRegistries.PACKAGE_PORT_TARGET_TYPE.getValue(id);
+        if (type == null)
+            throw new IllegalArgumentException("Unknown Create package port target type: " + id);
+        return type;
+    }
+
+    private static Identifier getTypeId(PackagePortTargetType type) {
+        Identifier id = CreateRegistries.PACKAGE_PORT_TARGET_TYPE.getKey(type);
+        if (id == null)
+            throw new IllegalArgumentException("Unregistered Create package port target type: " + type);
+        return id;
+    }
 
     public BlockPos relativePos;
 
