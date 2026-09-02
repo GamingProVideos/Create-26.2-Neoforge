@@ -1,0 +1,19 @@
+package com.simibubi.create.client.flywheel.backend.compile;
+
+import com.simibubi.create.client.flywheel.backend.NoiseTextures;
+import com.simibubi.create.foundation.utility.CreateResourceReloader;
+import net.minecraft.server.packs.resources.ResourceManager;
+
+public final class FlwProgramsReloader extends CreateResourceReloader {
+    public static final FlwProgramsReloader INSTANCE = new FlwProgramsReloader();
+
+    private FlwProgramsReloader() {
+        super("flywheel");
+    }
+
+    @Override
+    public void onResourceManagerReload(ResourceManager manager) {
+        FlwPrograms.reload(manager);
+        NoiseTextures.reload(manager);
+    }
+}

@@ -1,0 +1,5 @@
+@NullMarked
+package com.simibubi.create.content.decoration.palettes;
+
+import org.jspecify.annotations.NullMarked;
+

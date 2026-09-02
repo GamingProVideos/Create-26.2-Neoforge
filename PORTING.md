@@ -2,7 +2,7 @@
 
 This is an independent Minecraft 26.2 / NeoForge 26.2.0.36-beta source port.
 It is based on the authorized, publicly available Create-Fly 6.0.9 Minecraft
-26.2 source foundation and is labelled `6.0.10-port.1`. It is not an official
+26.2 source foundation and is labelled `6.0.10-port.5`. It is not an official
 Create 6.0.10 release and is not represented as a literal one-to-one copy.
 
 ## Requirements

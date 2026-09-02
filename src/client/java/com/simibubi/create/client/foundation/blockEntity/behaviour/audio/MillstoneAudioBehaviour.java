@@ -1,0 +1,27 @@
+package com.simibubi.create.client.foundation.blockEntity.behaviour.audio;
+
+import com.simibubi.create.client.foundation.sound.SoundScapes;
+import com.simibubi.create.client.foundation.sound.SoundScapes.AmbienceGroup;
+import com.simibubi.create.content.kinetics.millstone.MillstoneBlockEntity;
+import net.minecraft.util.Mth;
+
+public class MillstoneAudioBehaviour extends KineticAudioBehaviour<MillstoneBlockEntity> {
+    public MillstoneAudioBehaviour(MillstoneBlockEntity be) {
+        super(be);
+    }
+
+    @Override
+    public void tickAudio() {
+        super.tickAudio();
+
+        if (blockEntity.getSpeed() == 0) {
+            return;
+        }
+        if (blockEntity.capability.getItem(0).isEmpty()) {
+            return;
+        }
+
+        float pitch = Mth.clamp(Math.abs(blockEntity.getSpeed()) / 256.0f + 0.45f, 0.85f, 1.0f);
+        SoundScapes.play(AmbienceGroup.MILLING, blockEntity.getBlockPos(), pitch);
+    }
+}

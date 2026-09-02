@@ -1,0 +1,26 @@
+package com.simibubi.create.infrastructure.packet.s2c;
+
+import com.simibubi.create.AllClientHandle;
+import com.simibubi.create.AllPackets;
+import com.simibubi.create.content.trains.entity.Train;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketType;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+
+public record AddTrainPacket(Train train) implements Packet<ClientGamePacketListener> {
+    public static final StreamCodec<RegistryFriendlyByteBuf, AddTrainPacket> CODEC = Train.STREAM_CODEC.map(AddTrainPacket::new,
+        AddTrainPacket::train
+    );
+
+    @Override
+    public void handle(ClientGamePacketListener listener) {
+        AllClientHandle.INSTANCE.onAddTrain(this);
+    }
+
+    @Override
+    public PacketType<AddTrainPacket> type() {
+        return AllPackets.ADD_TRAIN;
+    }
+}

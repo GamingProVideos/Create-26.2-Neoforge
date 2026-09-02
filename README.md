@@ -21,7 +21,7 @@ An unofficial community port of Create 6.0.10 to Minecraft 26.2 and NeoForge 26.
 | Minecraft | 26.2 |
 | NeoForge | 26.2.0.36-beta |
 | Create base | 6.0.10 |
-| Port version | 6.0.10-port.1 |
+| Port version | 6.0.10-port.6 |
 | Java | 25 |
 
 The current Gradle configuration builds a **NeoForge JAR only**. Fabric-related source and metadata are retained where
@@ -35,6 +35,7 @@ release.
 - Rendering updates for newer Minecraft item, entity, block-entity, GUI, and render-pipeline APIs.
 - Included porting work for the Create integrations with Flywheel and Ponder.
 - Compatibility source for supported recipe-viewer integrations where available.
+- Minecraft 26.2 OBJ rendering fix for chain conveyors and water wheels: `neoforge:obj` models now use NeoForge's native 26.2 loader, including the ModelState/UV transform fix.
 
 The goal is to preserve upstream Create behavior as closely as the current Minecraft and NeoForge APIs allow. Some
 features may still need additional testing or fixes.
@@ -46,6 +47,13 @@ features may still need additional testing or fixes.
 - Test complex contraptions, trains, Ponder scenes, shaders, and third-party mod compatibility in a separate world first.
 - Shaders may disable Flywheel optimizations or expose rendering incompatibilities.
 - Include the full crash report and latest log when reporting a problem.
+
+
+### Port.6 render fixes
+
+- Chain Conveyor now renders a normal vertical Create shaft instead of the OBJ bullwheel/shaft partial that appeared as an oversized top/ghost model on 26.2.
+- Large Water Wheel placed blockstates use an empty (`minecraft:block/air`) chunk model; the animated block-entity renderer still uses the full wheel partial, preventing the stationary ghost wheel from being drawn underneath it.
+- Belts are forced through `BeltRenderer` rather than the Flywheel belt visual, and every segment renders its top/bottom/pulley geometry. This fixes uncased belts becoming completely invisible.
 
 ## Building and running
 

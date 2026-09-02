@@ -1,0 +1,20 @@
+package com.simibubi.create;
+
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntityType;
+
+import static com.simibubi.create.Create.MOD_ID;
+
+public class AllEntityTags {
+    public static final TagKey<EntityType<?>> BLAZE_BURNER_CAPTURABLE = create("blaze_burner_capturable");
+    public static final TagKey<EntityType<?>> IGNORE_SEAT = create("ignore_seat");
+
+    private static TagKey<EntityType<?>> create(String name) {
+        return TagKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, name));
+    }
+
+    public static void register() {
+    }
+}

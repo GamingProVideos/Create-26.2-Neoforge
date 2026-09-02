@@ -1,0 +1,91 @@
+package com.simibubi.create.client.content.equipment.toolbox;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.simibubi.create.client.AllPartialModels;
+import com.simibubi.create.client.catnip.render.CachedBuffers;
+import com.simibubi.create.client.catnip.render.SuperByteBufferRenderState;
+import com.simibubi.create.client.content.equipment.toolbox.ToolboxRenderer.ToolboxRenderState;
+import com.simibubi.create.client.foundation.blockEntity.renderer.SmartBlockEntityRenderer;
+import com.simibubi.create.content.equipment.toolbox.ToolboxBlock;
+import com.simibubi.create.content.equipment.toolbox.ToolboxBlockEntity;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider.Context;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.CardinalLighting;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.UnknownNullability;
+import org.joml.Quaternionf;
+import org.jspecify.annotations.Nullable;
+
+import static com.simibubi.create.client.content.kinetics.base.KineticBlockEntityRenderer.getXRotateAngle;
+import static com.simibubi.create.client.content.kinetics.base.KineticBlockEntityRenderer.getYRotateAngle;
+
+public class ToolboxRenderer implements BlockEntityRenderer<ToolboxBlockEntity, ToolboxRenderState> {
+    public ToolboxRenderer(Context context) {
+    }
+
+    @Override
+    public ToolboxRenderState createRenderState() {
+        return new ToolboxRenderState();
+    }
+
+    @Override
+    public void extractRenderState(
+        ToolboxBlockEntity be,
+        ToolboxRenderState state,
+        float tickProgress,
+        Vec3 cameraPos,
+        @Nullable CrumblingOverlay crumblingOverlay
+    ) {
+        Level level = SmartBlockEntityRenderer.extractBase(be, state, crumblingOverlay);
+        CardinalLighting cardinalLighting = SmartBlockEntityRenderer.getCardinalLighting(level);
+        state.lid = CachedBuffers.partial(AllPartialModels.TOOLBOX_LIDS.get(be.getColor()), state.blockState)
+            .cardinalLighting(cardinalLighting).light(state.lightCoords).extractRenderState();
+        state.drawer = CachedBuffers.partial(AllPartialModels.TOOLBOX_DRAWER, state.blockState)
+            .cardinalLighting(cardinalLighting).light(state.lightCoords).extractRenderState();
+        Direction facing = state.blockState.getValue(ToolboxBlock.FACING).getOpposite();
+        state.yRot = getYRotateAngle(-facing.toYRot());
+        state.xRot = getXRotateAngle(be.lid.getValue(tickProgress) * 135);
+        float drawerOffset = be.drawers.getValue(tickProgress);
+        state.offset1 = -drawerOffset * 0.175f;
+        state.offset2 = state.offset1 * 2;
+    }
+
+    @Override
+    public void submit(
+        ToolboxRenderState state,
+        PoseStack matrices,
+        SubmitNodeCollector queue,
+        CameraRenderState cameraState
+    ) {
+        if (state.yRot != null) {
+            matrices.rotateAround(state.yRot, 0.5f, 0.5f, 0.5f);
+        }
+        matrices.pushPose();
+        matrices.translate(0, 0.125f, state.offset1);
+        state.drawer.submit(matrices, queue);
+        matrices.popPose();
+        matrices.pushPose();
+        matrices.translate(0, 0, state.offset2);
+        state.drawer.submit(matrices, queue);
+        matrices.popPose();
+        if (state.xRot != null) {
+            matrices.rotateAround(state.xRot, 0, 0.375f, 0.75f);
+        }
+        state.lid.submit(matrices, queue);
+    }
+
+    public static class ToolboxRenderState extends BlockEntityRenderState {
+        public @UnknownNullability SuperByteBufferRenderState lid;
+        public @UnknownNullability SuperByteBufferRenderState drawer;
+        public @Nullable Quaternionf yRot;
+        public @Nullable Quaternionf xRot;
+        public float offset1;
+        public float offset2;
+    }
+}

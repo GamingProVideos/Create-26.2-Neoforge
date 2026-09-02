@@ -1,0 +1,86 @@
+package com.simibubi.create;
+
+import com.simibubi.create.content.equipment.sandPaper.SandPaperPolishingRecipe;
+import com.simibubi.create.content.fluids.transfer.EmptyingRecipe;
+import com.simibubi.create.content.fluids.transfer.FillingRecipe;
+import com.simibubi.create.content.kinetics.crafter.MechanicalCraftingRecipe;
+import com.simibubi.create.content.kinetics.crusher.CrushingRecipe;
+import com.simibubi.create.content.kinetics.deployer.DeployerApplicationRecipe;
+import com.simibubi.create.content.kinetics.deployer.ItemApplicationRecipe;
+import com.simibubi.create.content.kinetics.deployer.ManualApplicationRecipe;
+import com.simibubi.create.content.kinetics.fan.processing.HauntingRecipe;
+import com.simibubi.create.content.kinetics.fan.processing.SplashingRecipe;
+import com.simibubi.create.content.kinetics.millstone.MillingRecipe;
+import com.simibubi.create.content.kinetics.mixer.CompactingRecipe;
+import com.simibubi.create.content.kinetics.mixer.MixingRecipe;
+import com.simibubi.create.content.kinetics.mixer.PotionRecipe;
+import com.simibubi.create.content.kinetics.press.PressingRecipe;
+import com.simibubi.create.content.kinetics.saw.CuttingRecipe;
+import com.simibubi.create.content.processing.sequenced.SequencedAssemblyRecipe;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeSerializer;
+import net.minecraft.world.item.crafting.RecipeType;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
+
+import static com.simibubi.create.Create.MOD_ID;
+
+public class AllRecipeTypes {
+    public static final List<RecipeType<? extends ItemApplicationRecipe>> DEPLOYER_RECIPES = new ArrayList<>();
+    public static final RecipeType<CrushingRecipe> CRUSHING = register("crushing");
+    public static final RecipeType<CuttingRecipe> CUTTING = register("cutting");
+    public static final RecipeType<MillingRecipe> MILLING = register("milling");
+    public static final RecipeType<MixingRecipe> MIXING = register("mixing");
+    public static final RecipeType<CompactingRecipe> COMPACTING = register("compacting");
+    public static final RecipeType<PressingRecipe> PRESSING = register("pressing");
+    public static final RecipeType<SandPaperPolishingRecipe> SANDPAPER_POLISHING = register("sandpaper_polishing");
+    public static final RecipeType<SplashingRecipe> SPLASHING = register("splashing");
+    public static final RecipeType<HauntingRecipe> HAUNTING = register("haunting");
+    public static final RecipeType<DeployerApplicationRecipe> DEPLOYING = register("deploying");
+    public static final RecipeType<FillingRecipe> FILLING = register("filling");
+    public static final RecipeType<EmptyingRecipe> EMPTYING = register("emptying");
+    public static final RecipeType<ManualApplicationRecipe> ITEM_APPLICATION = register("item_application");
+    public static final RecipeType<MechanicalCraftingRecipe> MECHANICAL_CRAFTING = register("mechanical_crafting");
+    public static final RecipeType<SequencedAssemblyRecipe> SEQUENCED_ASSEMBLY = register("sequenced_assembly");
+    public static final RecipeType<PotionRecipe> POTION = register("potion");
+
+    private static final TagKey<RecipeSerializer<?>> AUTOMATION_IGNORE_TAG = TagKey.create(
+        Registries.RECIPE_SERIALIZER,
+        Identifier.fromNamespaceAndPath(MOD_ID, "automation_ignore")
+    );
+    public static final Predicate<RecipeHolder<?>> CAN_BE_AUTOMATED = r -> !r.id().identifier().getPath()
+        .endsWith("_manual_only");
+
+    public static boolean shouldIgnoreInAutomation(RecipeHolder<?> recipe) {
+        RecipeSerializer<?> serializer = recipe.value().getSerializer();
+        if (serializer != null && BuiltInRegistries.RECIPE_SERIALIZER.wrapAsHolder(serializer)
+            .is(AUTOMATION_IGNORE_TAG)) {
+            return true;
+        }
+        return !CAN_BE_AUTOMATED.test(recipe);
+    }
+
+    private static <T extends Recipe<?>> RecipeType<T> register(String name) {
+        Identifier id = Identifier.fromNamespaceAndPath(MOD_ID, name);
+        return Registry.register(
+            BuiltInRegistries.RECIPE_TYPE, id, new RecipeType<T>() {
+                public String toString() {
+                    return id.toString();
+                }
+            }
+        );
+    }
+
+    public static void register() {
+        DEPLOYER_RECIPES.add(DEPLOYING);
+        DEPLOYER_RECIPES.add(ITEM_APPLICATION);
+    }
+}

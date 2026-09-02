@@ -1,0 +1,68 @@
+package com.simibubi.create.infrastructure.packet.c2s;
+
+import com.simibubi.create.AllHandle;
+import com.simibubi.create.AllPackets;
+import com.simibubi.create.catnip.codecs.stream.CatnipLargerStreamCodecs;
+import com.simibubi.create.catnip.codecs.stream.CatnipStreamCodecs;
+import com.simibubi.create.content.equipment.zapper.ConfigureZapperPacket;
+import com.simibubi.create.content.equipment.zapper.terrainzapper.WorldshaperItem;
+import com.simibubi.create.infrastructure.component.PlacementOptions;
+import com.simibubi.create.infrastructure.component.PlacementPatterns;
+import com.simibubi.create.infrastructure.component.TerrainBrushes;
+import com.simibubi.create.infrastructure.component.TerrainTools;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.PacketType;
+import net.minecraft.network.protocol.game.ServerGamePacketListener;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+
+public record ConfigureWorldshaperPacket(InteractionHand hand, PlacementPatterns pattern, TerrainBrushes brush,
+                                         int brushParamX, int brushParamY, int brushParamZ, TerrainTools tool,
+                                         PlacementOptions placement) implements ConfigureZapperPacket {
+    public static final StreamCodec<ByteBuf, ConfigureWorldshaperPacket> CODEC = CatnipLargerStreamCodecs.composite(
+        CatnipStreamCodecs.HAND,
+        packet -> packet.hand,
+        PlacementPatterns.STREAM_CODEC,
+        packet -> packet.pattern,
+        TerrainBrushes.STREAM_CODEC,
+        packet -> packet.brush,
+        ByteBufCodecs.VAR_INT,
+        packet -> packet.brushParamX,
+        ByteBufCodecs.VAR_INT,
+        packet -> packet.brushParamY,
+        ByteBufCodecs.VAR_INT,
+        packet -> packet.brushParamZ,
+        TerrainTools.STREAM_CODEC,
+        packet -> packet.tool,
+        PlacementOptions.STREAM_CODEC,
+        packet -> packet.placement,
+        ConfigureWorldshaperPacket::new
+    );
+
+    @Override
+    public void configureZapper(ItemStack stack) {
+        WorldshaperItem.configureSettings(
+            stack,
+            pattern,
+            brush,
+            brushParamX,
+            brushParamY,
+            brushParamZ,
+            tool,
+            placement
+        );
+    }
+
+    @Override
+    public void handle(ServerGamePacketListener listener) {
+        AllHandle.onConfigureWorldshaper((ServerGamePacketListenerImpl) listener, this);
+    }
+
+    @Override
+    public PacketType<ConfigureWorldshaperPacket> type() {
+        return AllPackets.CONFIGURE_WORLDSHAPER;
+    }
+}

@@ -4,7 +4,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.141'
 }
 
-group = 'com.zurrtum'
+group = 'com.simibubi'
 version = "${mod_version}-mc${minecraft_version}-neoforge"
 
 base {
@@ -16,14 +16,105 @@ java {
     withSourcesJar()
 }
 
+// Keep common and client code as explicit Gradle source sets. Previously the
+// client tree was bolted onto main via srcDir, which allowed the client mixin
+// JSON to reach the production jar while its compiled classes could be absent.
+sourceSets {
+    main {
+        java {
+            exclude 'com/simibubi/create/compat/rei/**'
+            exclude 'com/simibubi/create/compat/fabric/**'
+            exclude 'com/simibubi/create/compat/computercraft/implementation/**'
+            exclude 'com/simibubi/create/compat/computercraft/AllComputerDisplaySource.java'
+            exclude 'com/simibubi/create/compat/computercraft/AllComputerPeripherals.java'
+            exclude 'com/simibubi/create/compat/computercraft/ComputerDisplaySource.java'
+            exclude 'com/simibubi/create/compat/computercraft/ComputerIntegration.java'
+            exclude 'com/simibubi/create/compat/eiv/**'
+            exclude 'com/simibubi/create/mixin/ArchitecturyMixin.java'
+            exclude 'com/simibubi/create/mixin/MenuProviderMixin.java'
+            exclude 'com/simibubi/create/mixin/ReloadListenerMixin.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/FluidInventorySlotWrapper.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/FluidInventoryStorage.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/FluidInventoryStorageImpl.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/FluidItemContext.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/SidedFluidInventorySlotWrapper.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/SidedFluidInventoryStorageImpl.java'
+            exclude 'com/simibubi/create/infrastructure/transfer/SingleFluidStackStorage.java'
+        }
+        resources {
+            srcDir 'src/generated/resources'
+            exclude 'fabric.mod.json'
+            exclude 'create.classtweaker'
+            exclude '_data/**'
+        }
+    }
+
+    // Uses the conventional src/client/java and src/client/resources paths.
+    client {
+        java {
+            exclude 'com/simibubi/create/client/compat/rei/**'
+            exclude 'com/simibubi/create/client/compat/eiv/**'
+            exclude 'com/simibubi/create/client/compat/rrv/**'
+            exclude 'com/simibubi/create/client/compat/jei/**'
+            exclude 'com/simibubi/create/client/compat/fabric/**'
+            exclude 'com/simibubi/create/client/compat/trinkets/**'
+            exclude 'com/simibubi/create/client/mixin/CraftingViewRecipeAccessor.java'
+            exclude 'com/simibubi/create/client/mixin/FabricEIVMixin.java'
+            exclude 'com/simibubi/create/client/mixin/FluidItemSpecialRendererMixin.java'
+            exclude 'com/simibubi/create/client/mixin/IrisPipelinesMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ItemSlotMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ItemFeatureRendererMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ClientPackSourceMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ModelMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ModelPartMixin.java'
+            exclude 'com/simibubi/create/client/mixin/QuadRenderHelperMixin.java'
+            exclude 'com/simibubi/create/client/mixin/RecipeViewMenuMixin.java'
+            exclude 'com/simibubi/create/client/mixin/RecipeViewScreenMixin.java'
+            exclude 'com/simibubi/create/client/mixin/RrvRecipeViewMenuMixin.java'
+            exclude 'com/simibubi/create/client/mixin/RrvRecipeViewScreenMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ViewTypeButtonMixin.java'
+
+            // Fabric Renderer API adapters are not part of NeoForge. The
+            // Minecraft 26.2-native model/render code remains enabled.
+            exclude 'com/simibubi/create/client/flywheel/lib/model/baked/FabricEmitterSupplier.java'
+            exclude 'com/simibubi/create/client/flywheel/lib/model/baked/DualVertexConsumer.java'
+            exclude 'com/simibubi/create/client/foundation/model/FabricBakedModelHelper.java'
+            exclude 'com/simibubi/create/client/mixin/BufferAoPoseEmitterMixin.java'
+            exclude 'com/simibubi/create/client/mixin/BufferColorPoseEmitterMixin.java'
+            exclude 'com/simibubi/create/client/mixin/BufferEmitterMixin.java'
+            exclude 'com/simibubi/create/client/mixin/BufferPoseEmitterMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ConnectedTextureBehaviourMixin.java'
+            exclude 'com/simibubi/create/client/mixin/CopycatModelMixin.java'
+            exclude 'com/simibubi/create/client/mixin/CopycatPanelModelMixin.java'
+            exclude 'com/simibubi/create/client/mixin/CopycatStepModelMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ItemModelRenderHelperMixin.java'
+            exclude 'com/simibubi/create/client/mixin/ModelRenderHelperMixin.java'
+            exclude 'com/simibubi/create/client/mixin/WrapperBlockStateModelAccessor.java'
+            exclude 'com/simibubi/create/client/mixin/WrapperBlockStateModelMixin.java'
+        }
+    }
+}
+
+// Inherit normal project dependencies for the client source set.
+configurations {
+    clientImplementation.extendsFrom implementation
+    clientCompileOnly.extendsFrom compileOnly
+    clientRuntimeOnly.extendsFrom runtimeOnly
+    clientAnnotationProcessor.extendsFrom annotationProcessor
+}
+
 neoForge {
     version = neo_version
     accessTransformers = files('src/main/resources/META-INF/accesstransformer.cfg')
     interfaceInjectionData = files('src/main/resources/META-INF/create-injected-interfaces.json')
 
+    // The client source set needs Minecraft/NeoForge on its compile classpath.
+    addModdingDependenciesTo sourceSets.client
+
     mods {
         create {
             sourceSet sourceSets.main
+            sourceSet sourceSets.client
         }
     }
 
@@ -60,79 +151,8 @@ repositories {
 }
 
 dependencies {
-}
-
-sourceSets {
-    main {
-        java {
-            srcDir 'src/client/java'
-
-            exclude 'com/zurrtum/create/compat/rei/**'
-            exclude 'com/zurrtum/create/compat/fabric/**'
-            exclude 'com/zurrtum/create/compat/computercraft/implementation/**'
-            exclude 'com/zurrtum/create/compat/computercraft/AllComputerDisplaySource.java'
-            exclude 'com/zurrtum/create/compat/computercraft/AllComputerPeripherals.java'
-            exclude 'com/zurrtum/create/compat/computercraft/ComputerDisplaySource.java'
-            exclude 'com/zurrtum/create/compat/computercraft/ComputerIntegration.java'
-            exclude 'com/zurrtum/create/compat/eiv/**'
-            exclude 'com/zurrtum/create/client/compat/rei/**'
-            exclude 'com/zurrtum/create/client/compat/eiv/**'
-            exclude 'com/zurrtum/create/client/compat/rrv/**'
-            exclude 'com/zurrtum/create/client/compat/jei/**'
-            exclude 'com/zurrtum/create/client/compat/fabric/**'
-            exclude 'com/zurrtum/create/client/compat/trinkets/**'
-            exclude 'com/zurrtum/create/mixin/ArchitecturyMixin.java'
-            exclude 'com/zurrtum/create/mixin/MenuProviderMixin.java'
-            exclude 'com/zurrtum/create/mixin/ReloadListenerMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/CraftingViewRecipeAccessor.java'
-            exclude 'com/zurrtum/create/client/mixin/FabricEIVMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/FluidItemSpecialRendererMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/IrisPipelinesMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ItemSlotMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ItemFeatureRendererMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ClientPackSourceMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ModelMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ModelPartMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/QuadRenderHelperMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/RecipeViewMenuMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/RecipeViewScreenMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/RrvRecipeViewMenuMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/RrvRecipeViewScreenMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ViewTypeButtonMixin.java'
-
-            // Fabric Renderer API adapters are not part of NeoForge. The
-            // Minecraft 26.2-native model/render code remains enabled.
-            exclude 'com/zurrtum/create/client/flywheel/lib/model/baked/FabricEmitterSupplier.java'
-            exclude 'com/zurrtum/create/client/flywheel/lib/model/baked/DualVertexConsumer.java'
-            exclude 'com/zurrtum/create/client/foundation/model/FabricBakedModelHelper.java'
-            exclude 'com/zurrtum/create/client/mixin/BufferAoPoseEmitterMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/BufferColorPoseEmitterMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/BufferEmitterMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/BufferPoseEmitterMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ConnectedTextureBehaviourMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/CopycatModelMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/CopycatPanelModelMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/CopycatStepModelMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ItemModelRenderHelperMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/ModelRenderHelperMixin.java'
-            exclude 'com/zurrtum/create/client/mixin/WrapperBlockStateModelAccessor.java'
-            exclude 'com/zurrtum/create/client/mixin/WrapperBlockStateModelMixin.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/FluidInventorySlotWrapper.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/FluidInventoryStorage.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/FluidInventoryStorageImpl.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/FluidItemContext.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/SidedFluidInventorySlotWrapper.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/SidedFluidInventoryStorageImpl.java'
-            exclude 'com/zurrtum/create/infrastructure/transfer/SingleFluidStackStorage.java'
-        }
-        resources {
-            srcDir 'src/client/resources'
-            srcDir 'src/generated/resources'
-            exclude 'fabric.mod.json'
-            exclude 'create.classtweaker'
-            exclude '_data/**'
-        }
-    }
+    // Client classes compile and run against the common Create output.
+    clientImplementation sourceSets.main.output
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -151,7 +171,13 @@ tasks.named('processResources', ProcessResources) {
     }
 }
 
-jar {
+tasks.named('jar', Jar) {
+    // java's default jar task only includes main.output. Explicitly merge the
+    // client source-set output so create.client.mixins.json can always resolve
+    // its companion plugin and mixin classes in production.
+    dependsOn tasks.named(sourceSets.client.classesTaskName)
+    from(sourceSets.client.output)
+
     from('LICENSE')
     from('licenses') {
         into 'licenses'
@@ -161,4 +187,142 @@ jar {
             'MixinConfigs': 'create.mixins.json,create.client.mixins.json'
         )
     }
+}
+
+tasks.named('sourcesJar', Jar) {
+    from(sourceSets.client.allSource)
+}
+
+// Regression guard for the exact production crash that prompted this change.
+// A successful `build` now proves that both the client mixin config and the
+// critical classes it references are actually present in the distributable jar.
+tasks.register('verifyCreateJar') {
+    dependsOn tasks.named('jar')
+
+    doLast {
+        def jarFile = tasks.named('jar', Jar).get().archiveFile.get().asFile
+        def requiredEntries = [
+            'create.mixins.json',
+            'create.client.mixins.json',
+            'META-INF/services/com.simibubi.create.api.registry.CreateRegisterPlugin',
+            'com/simibubi/create/AllEarlyRegistries.class',
+            'com/simibubi/create/content/kinetics/RotationPropagator.class',
+            'com/simibubi/create/content/kinetics/base/KineticBlockEntity.class',
+            'com/simibubi/create/mixin/LivingEntityMixin.class',
+            'com/simibubi/create/client/mixin/MixinPlugin.class',
+            'com/simibubi/create/client/mixin/AbstractClientPlayerMixin.class',
+            'com/simibubi/create/client/mixin/EntityFluidInteractionMixin.class',
+            'com/simibubi/create/client/mixin/CuboidModelMixin.class',
+            'com/simibubi/create/client/mixin/ModelBlockRendererMixin.class',
+            'com/simibubi/create/client/flywheel/impl/visualization/VisualizerRegistryImpl.class',
+            'com/simibubi/create/client/flywheel/impl/extension/BlockEntityTypeExtension.class',
+            'com/simibubi/create/client/flywheel/impl/extension/EntityTypeExtension.class',
+            'com/simibubi/create/client/model/UnbakedModelParser.class',
+            'assets/create/blockstates/creative_motor.json',
+            'assets/create/blockstates/water_wheel.json',
+            'assets/create/blockstates/large_water_wheel.json',
+            'assets/create/models/block/creative_motor/block.json',
+            'assets/create/models/block/water_wheel/wheel.json',
+            'assets/create/models/block/water_wheel/water_wheel.obj',
+            'assets/create/models/block/large_water_wheel/block.json',
+            'assets/create/models/block/large_water_wheel/waterwheel_large.obj',
+            'assets/create/textures/block/creative_motor.png',
+            'assets/create/textures/block/waterwheel_metal.png'
+        ]
+        def jarContents = zipTree(jarFile)
+
+        requiredEntries.each { entry ->
+            if (jarContents.matching { include entry }.files.empty) {
+                throw new GradleException("Create production jar is missing required entry: ${entry}")
+            }
+        }
+
+        if (!jarContents.matching { include 'com/zurrtum/**' }.files.empty) {
+            throw new GradleException('Create production jar still contains the incompatible com.zurrtum namespace')
+        }
+
+        def commonMixinConfig = jarContents.matching { include 'create.mixins.json' }.singleFile.text
+        if (commonMixinConfig.contains('RegistryDataLoaderMixin')) {
+            throw new GradleException(
+                'Create production jar enables RegistryDataLoaderMixin, which duplicates NeoForge datapack registries'
+            )
+        }
+    }
+}
+
+// Guard against restoring the pre-26.2 diving mixin. That old callback wrapped
+// a LivingEntity#baseTick invocation that no longer exists in Minecraft 26.2
+// and causes a fatal (0/1) Mixin injection failure during startup.
+tasks.register('verifyLivingEntityMixinPort') {
+    doLast {
+        def source = file('src/main/java/com/simibubi/create/mixin/LivingEntityMixin.java').text
+        if (source.contains('private boolean breathInLava(')) {
+            throw new GradleException('LivingEntityMixin still contains the obsolete breathInLava WrapOperation callback')
+        }
+        if (!source.contains('create$tickDivingAir')) {
+            throw new GradleException('LivingEntityMixin is missing the Minecraft 26.2 diving-air replacement injection')
+        }
+        if (!source.contains('isEyeInFluid(FluidTags.LAVA)')) {
+            throw new GradleException('LivingEntityMixin lava breathing must be eye-submersion based')
+        }
+    }
+}
+
+// Guard against the kinetic "ghost model" regression. The wrapper map must
+// exist before Minecraft's first block-state model bake, and the native model
+// renderer mixin must remain available to call WrapperBlockStateModel#addPartsWithInfo.
+tasks.register('verifyKineticModelPort') {
+    doLast {
+        def neoClient = file('src/client/java/com/simibubi/create/client/CreateNeoForgeClient.java').text
+        if (!neoClient.contains('AllModels.register();')) {
+            throw new GradleException('CreateNeoForgeClient must register AllModels before initial model baking')
+        }
+        def allModels = file('src/client/java/com/simibubi/create/client/AllModels.java').text
+        if (!allModels.contains('private static boolean registered;')) {
+            throw new GradleException('AllModels.register() must stay idempotent for early NeoForge registration')
+        }
+        def modelLoaderMixin = file('src/client/java/com/simibubi/create/client/mixin/BlockStateModelLoaderMixin.java').text
+        if (!modelLoaderMixin.contains('AllModels.register();')) {
+            throw new GradleException('BlockStateModelLoaderMixin must ensure model wrappers are registered before baking')
+        }
+        def plugin = file('src/client/java/com/simibubi/create/client/mixin/MixinPlugin.java').text
+        if (!plugin.contains('"ModelBlockRendererMixin"')) {
+            throw new GradleException('Native ModelBlockRendererMixin is required for kinetic wrapper models')
+        }
+    }
+}
+
+// Guard the Minecraft 26.2 OBJ-model fix used by chain conveyors and water wheels.
+// NeoForge PR #3355 fixed ModelState/UV-lock handling in the 26.2 OBJ loader; Create's
+// older copied OBJ code must not silently bypass that fix again.
+tasks.register('verifyObjKineticTexturePort') {
+    doLast {
+        def parser = file('src/client/java/com/simibubi/create/client/model/UnbakedModelParser.java').text
+        if (!parser.contains('net.neoforged.neoforge.client.model.obj.ObjLoader')) {
+            throw new GradleException('UnbakedModelParser must use NeoForge 26.2 native ObjLoader')
+        }
+        if (parser.contains('com.simibubi.create.client.model.obj.ObjLoader')) {
+            throw new GradleException('UnbakedModelParser still routes neoforge:obj through the stale Create copy')
+        }
+
+        def geometry = file('src/client/java/com/simibubi/create/client/model/obj/ObjGeometry.java').text
+        if (!geometry.contains('inverseFaceTransformation')) {
+            throw new GradleException('Fallback ObjGeometry is missing 26.2 inverse face UV transformation')
+        }
+        if (!geometry.contains('composeRootTransformIntoModelState')) {
+            throw new GradleException('Fallback ObjGeometry is dropping ModelState while composing root transforms')
+        }
+
+        def minecraftMixin = file('src/client/java/com/simibubi/create/client/mixin/MinecraftMixin.java').text
+        if (minecraftMixin.contains('registerReloadListener(ObjLoader.INSTANCE)')) {
+            throw new GradleException('MinecraftMixin must not separately register the stale copied OBJ reloader')
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyKineticModelPort')
+    dependsOn tasks.named('verifyLivingEntityMixinPort')
+    dependsOn tasks.named('verifyCreateJar')
+    dependsOn tasks.named('verifyObjKineticTexturePort')
 }
