@@ -172,7 +172,7 @@ public class ParallelTaskExecutor implements TaskExecutorImpl {
     private void processTask(Runnable task) {
         try {
             task.run();
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             if (mainThreadErrorLogLatch > 0) {
                 FlwImpl.LOGGER.error("Error running task", e);
 
@@ -212,7 +212,7 @@ public class ParallelTaskExecutor implements TaskExecutorImpl {
         private void processTask(Runnable task) {
             try {
                 task.run();
-            } catch (Exception e) {
+            } catch (Exception | LinkageError e) {
                 if (errorLogLatch > 0) {
                     FlwImpl.LOGGER.error("Error running task", e);
 

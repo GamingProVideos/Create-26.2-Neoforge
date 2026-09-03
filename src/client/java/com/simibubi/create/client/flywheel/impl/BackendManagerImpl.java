@@ -4,6 +4,7 @@ import com.simibubi.create.client.flywheel.api.backend.Backend;
 import com.simibubi.create.client.flywheel.impl.visualization.VisualizationManagerImpl;
 import com.simibubi.create.client.flywheel.lib.backend.SimpleBackend;
 import com.simibubi.create.client.flywheel.lib.util.ResourceUtil;
+import com.simibubi.create.client.flywheel.lib.util.ShadersModHelper;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.Identifier;
 
@@ -16,6 +17,11 @@ public final class BackendManagerImpl {
 
     private static Backend backend = OFF_BACKEND;
 
+    // Shader packs may be toggled by Iris without performing the same full
+    // resource reload path Flywheel historically relied on. Track the state so
+    // we can swap between Flywheel and the vanilla/Sodium fallback immediately.
+    private static Boolean lastShaderPackInUse;
+
     private BackendManagerImpl() {
     }
 
@@ -25,6 +31,38 @@ public final class BackendManagerImpl {
 
     public static boolean isBackendOn() {
         return backend != OFF_BACKEND;
+    }
+
+    /**
+     * Fast runtime gate used by Create's many renderer checks. Shader state is
+     * sampled once per render update by refreshForShaderPackState(), so this
+     * does not invoke the Iris API once per block entity in large factories.
+     */
+    public static boolean isVisualizationBackendAvailable() {
+        if (backend == OFF_BACKEND) {
+            return false;
+        }
+
+        if (lastShaderPackInUse != null) {
+            return !lastShaderPackInUse.booleanValue();
+        }
+
+        // Only used before the first render-state sample.
+        return backend.isSupported();
+    }
+
+    /**
+     * Cached shader-pack state for hot renderer paths. The value is refreshed
+     * once per render-context update instead of invoking Iris reflectively for
+     * every Create block/contraption render layer.
+     */
+    public static boolean isShaderPackInUseCached() {
+        if (lastShaderPackInUse != null) {
+            return lastShaderPackInUse.booleanValue();
+        }
+
+        // Startup fallback before the first render-context update.
+        return ShadersModHelper.isShaderPackInUse();
     }
 
     // Don't store this statically because backends can theoretically change their priorities at runtime.
@@ -86,12 +124,45 @@ public final class BackendManagerImpl {
     public static void init() {
     }
 
+    /**
+     * Detect Iris shader-pack toggles that happen while a level is already
+     * loaded. Without this, the old Flywheel backend can remain selected after
+     * it becomes unsupported, causing Create renderers to suppress their normal
+     * fallback while Flywheel itself draws nothing.
+     */
+    public static void refreshForShaderPackState(ClientLevel level) {
+        boolean shaderPackInUse = ShadersModHelper.isShaderPackInUse();
+
+        if (lastShaderPackInUse == null) {
+            lastShaderPackInUse = shaderPackInUse;
+            chooseBackend();
+            VisualizationManagerImpl.reset(level);
+            return;
+        }
+
+        if (lastShaderPackInUse.booleanValue() == shaderPackInUse) {
+            return;
+        }
+
+        lastShaderPackInUse = shaderPackInUse;
+        chooseBackend();
+        VisualizationManagerImpl.reset(level);
+
+        FlwImpl.LOGGER.info(
+            "Iris shader-pack state changed (enabled={}); Flywheel backend is now '{}'",
+            shaderPackInUse,
+            getBackendString()
+        );
+    }
+
     public static void onEndClientResourceReload() {
+        lastShaderPackInUse = ShadersModHelper.isShaderPackInUse();
         chooseBackend();
         VisualizationManagerImpl.resetAll();
     }
 
     public static void onReloadLevelRenderer(ClientLevel level) {
+        lastShaderPackInUse = ShadersModHelper.isShaderPackInUse();
         chooseBackend();
         VisualizationManagerImpl.reset(level);
     }

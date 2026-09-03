@@ -5,11 +5,14 @@ import com.simibubi.create.client.flywheel.api.visual.DynamicVisual;
 import com.simibubi.create.client.flywheel.api.visual.TickableVisual;
 import com.simibubi.create.client.flywheel.api.visualization.VisualManager;
 import com.simibubi.create.client.flywheel.api.visualization.VisualizationContext;
+import com.simibubi.create.client.flywheel.impl.visualization.storage.Action;
 import com.simibubi.create.client.flywheel.impl.visualization.storage.Storage;
 import com.simibubi.create.client.flywheel.impl.visualization.storage.Transaction;
 import com.simibubi.create.client.flywheel.lib.task.SimplePlan;
 import it.unimi.dsi.fastutil.longs.LongSet;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -29,6 +32,11 @@ public class VisualManagerImpl<T, S extends Storage<T>> implements VisualManager
     @Override
     public int visualCount() {
         return getStorage().getAllVisuals().size();
+    }
+
+    @Override
+    public boolean isVisualized(T obj) {
+        return getStorage().hasVisual(obj);
     }
 
     @Override
@@ -56,12 +64,39 @@ public class VisualManagerImpl<T, S extends Storage<T>> implements VisualManager
 
     public void processQueue(VisualizationContext visualizationContext, float partialTick) {
         var storage = getStorage();
+
+        // Large Create factories can enqueue the same visual update several times
+        // before the next frame/tick plan gets a chance to drain this queue.
+        // Collapse those duplicates by object identity so one block/entity gets at
+        // most one expensive visual operation per drain.
+        Map<T, Action> pending = new IdentityHashMap<>();
         Transaction<T> transaction;
         while ((transaction = queue.poll()) != null) {
-            switch (transaction.action()) {
-                case ADD -> storage.add(visualizationContext, transaction.obj(), partialTick);
-                case REMOVE -> storage.remove(transaction.obj());
-                case UPDATE -> storage.update(transaction.obj(), partialTick);
+            T obj = transaction.obj();
+            Action next = transaction.action();
+            Action previous = pending.get(obj);
+
+            if (previous == null) {
+                pending.put(obj, next);
+                continue;
+            }
+
+            Action merged = switch (next) {
+                case REMOVE -> Action.REMOVE;
+                case ADD -> Action.ADD;
+                case UPDATE -> previous == Action.ADD ? Action.ADD
+                    : previous == Action.REMOVE ? Action.REMOVE
+                    : Action.UPDATE;
+            };
+            pending.put(obj, merged);
+        }
+
+        for (Map.Entry<T, Action> entry : pending.entrySet()) {
+            T obj = entry.getKey();
+            switch (entry.getValue()) {
+                case ADD -> storage.add(visualizationContext, obj, partialTick);
+                case REMOVE -> storage.remove(obj);
+                case UPDATE -> storage.update(obj, partialTick);
             }
         }
     }

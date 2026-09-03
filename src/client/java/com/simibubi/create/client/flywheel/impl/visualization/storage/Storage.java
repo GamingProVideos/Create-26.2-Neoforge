@@ -3,6 +3,7 @@ package com.simibubi.create.client.flywheel.impl.visualization.storage;
 import com.simibubi.create.client.flywheel.api.task.Plan;
 import com.simibubi.create.client.flywheel.api.visual.*;
 import com.simibubi.create.client.flywheel.api.visualization.VisualizationContext;
+import com.simibubi.create.client.flywheel.impl.FlwImpl;
 import com.simibubi.create.client.flywheel.impl.ImplDebugFlags;
 import com.simibubi.create.client.flywheel.lib.task.ConditionalPlan;
 import com.simibubi.create.client.flywheel.lib.task.ForEachPlan;
@@ -29,6 +30,10 @@ public abstract class Storage<T> {
 
     public Collection<Visual> getAllVisuals() {
         return visuals.values();
+    }
+
+    public boolean hasVisual(T obj) {
+        return visuals.containsKey(obj);
     }
 
     public Plan<DynamicVisual.Context> framePlan() {
@@ -66,13 +71,27 @@ public abstract class Storage<T> {
     public void add(VisualizationContext visualizationContext, T obj, float partialTick) {
         Visual visual = visuals.get(obj);
 
-        if (visual == null) {
-            visual = createRaw(visualizationContext, obj, partialTick);
+        if (visual != null) {
+            return;
+        }
 
-            if (visual != null) {
-                setup(visual, partialTick);
-                visuals.put(obj, visual);
+        try {
+            visual = createRaw(visualizationContext, obj, partialTick);
+            if (visual == null) {
+                return;
             }
+
+            setup(visual, partialTick);
+            visuals.put(obj, visual);
+        } catch (Exception | LinkageError e) {
+            // Resource/render API mismatches should degrade to the normal Minecraft
+            // renderer rather than taking down the whole frame. setup() can call
+            // addon-provided code too, so guard that path in addition to createRaw().
+            if (visual != null) {
+                unregister(visual);
+                safeDelete(visual);
+            }
+            FlwImpl.LOGGER.error("Flywheel visual setup failed; leaving object on fallback renderer: {}", obj, e);
         }
     }
 
@@ -83,6 +102,68 @@ public abstract class Storage<T> {
             return;
         }
 
+        unregister(visual);
+        safeDelete(visual);
+    }
+
+    public void update(T obj, float partialTick) {
+        Visual visual = visuals.get(obj);
+
+        if (visual == null) {
+            return;
+        }
+
+        try {
+            visual.update(partialTick);
+        } catch (Exception | LinkageError e) {
+            // A visual that can no longer update is unsafe to keep owning the
+            // object. Remove it immediately so normal rendering becomes active.
+            visuals.remove(obj);
+            unregister(visual);
+            safeDelete(visual);
+            FlwImpl.LOGGER.error("Flywheel visual update failed; switched object to fallback renderer: {}", obj, e);
+        }
+    }
+
+    public void recreateAll(VisualizationContext visualizationContext, float partialTick) {
+        dynamicVisuals.clear();
+        tickableVisuals.clear();
+        simpleDynamicVisuals.clear();
+        simpleTickableVisuals.clear();
+        lightUpdatedVisuals.clear();
+        shaderLightVisuals.clear();
+
+        // Do not leave null values in the visual map when a renderer or addon
+        // visual fails to recreate. A null entry would make the object look
+        // "visualized" even though nothing can actually draw it.
+        List<T> objects = new ArrayList<>(visuals.keySet());
+        visuals.values().forEach(this::safeDelete);
+        visuals.clear();
+
+        for (T obj : objects) {
+            Visual out = null;
+            try {
+                out = createRaw(visualizationContext, obj, partialTick);
+                if (out == null) {
+                    continue;
+                }
+
+                setup(out, partialTick);
+                visuals.put(obj, out);
+            } catch (Exception | LinkageError e) {
+                if (out != null) {
+                    unregister(out);
+                    safeDelete(out);
+                }
+                FlwImpl.LOGGER.error("Flywheel visual recreate failed; using fallback renderer for {}", obj, e);
+            }
+        }
+    }
+
+    @Nullable
+    protected abstract Visual createRaw(VisualizationContext visualizationContext, T obj, float partialTick);
+
+    private void unregister(Visual visual) {
         if (visual instanceof DynamicVisual dynamic) {
             if (visual instanceof SimpleDynamicVisual simpleDynamic) {
                 simpleDynamicVisuals.remove(simpleDynamic);
@@ -103,43 +184,15 @@ public abstract class Storage<T> {
         if (visual instanceof ShaderLightVisual shaderLight) {
             shaderLightVisuals.remove(shaderLight);
         }
-
-        visual.delete();
     }
 
-    public void update(T obj, float partialTick) {
-        Visual visual = visuals.get(obj);
-
-        if (visual == null) {
-            return;
-        }
-
-        visual.update(partialTick);
-    }
-
-    public void recreateAll(VisualizationContext visualizationContext, float partialTick) {
-        dynamicVisuals.clear();
-        tickableVisuals.clear();
-        simpleDynamicVisuals.clear();
-        simpleTickableVisuals.clear();
-        lightUpdatedVisuals.clear();
-        shaderLightVisuals.clear();
-
-        visuals.replaceAll((obj, visual) -> {
+    private void safeDelete(Visual visual) {
+        try {
             visual.delete();
-
-            var out = createRaw(visualizationContext, obj, partialTick);
-
-            if (out != null) {
-                setup(out, partialTick);
-            }
-
-            return out;
-        });
+        } catch (Exception | LinkageError e) {
+            FlwImpl.LOGGER.error("Flywheel visual cleanup failed; continuing", e);
+        }
     }
-
-    @Nullable
-    protected abstract Visual createRaw(VisualizationContext visualizationContext, T obj, float partialTick);
 
     private void setup(Visual visual, float partialTick) {
         if (visual instanceof DynamicVisual dynamic) {
@@ -182,7 +235,7 @@ public abstract class Storage<T> {
         simpleTickableVisuals.clear();
         lightUpdatedVisuals.clear();
         shaderLightVisuals.clear();
-        visuals.values().forEach(Visual::delete);
+        visuals.values().forEach(this::safeDelete);
         visuals.clear();
     }
 }

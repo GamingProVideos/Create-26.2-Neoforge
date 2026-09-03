@@ -467,3 +467,117 @@ tasks.register('verifyDualChainConveyorPort') {
 tasks.named('build') {
     dependsOn tasks.named('verifyDualChainConveyorPort')
 }
+
+// Port.20 regression guard: keep the stability/compatibility behavior that lets
+// broken visuals, shaders, render mods, and source-ported addon registries fall
+// back cleanly instead of disappearing or using invalid registry-ID networking.
+tasks.register('verifyPort20StabilityCompatibility') {
+    doLast {
+        def visualManager = file('src/client/java/com/simibubi/create/client/flywheel/api/visualization/VisualManager.java').text
+        if (!visualManager.contains('boolean isVisualized(T obj);'))
+            throw new GradleException('Port 20 regression: VisualManager no longer exposes live-visual state')
+
+        def helper = file('src/client/java/com/simibubi/create/client/flywheel/lib/visualization/VisualizationHelper.java').text
+        if (!helper.contains('manager.blockEntities().isVisualized(blockEntity)'))
+            throw new GradleException('Port 20 regression: block entities can suppress vanilla rendering before a live visual exists')
+        if (!helper.contains('manager.entities().isVisualized(entity)'))
+            throw new GradleException('Port 20 regression: entities can suppress vanilla rendering before a live visual exists')
+
+        def storage = file('src/client/java/com/simibubi/create/client/flywheel/impl/visualization/storage/Storage.java').text
+        if (!storage.contains('Flywheel visual update failed; switched object to fallback renderer'))
+            throw new GradleException('Port 20 regression: failed visual updates do not fall back safely')
+        if (!storage.contains('safeDelete(Visual visual)'))
+            throw new GradleException('Port 20 regression: visual cleanup is not guarded')
+
+        def blockStorage = file('src/client/java/com/simibubi/create/client/flywheel/impl/visualization/storage/BlockEntityStorage.java').text
+        if (!blockStorage.contains('FAILED_VISUAL_TYPES.contains(obj.getType())'))
+            throw new GradleException('Port 20 regression: repeatedly failing block visual types are not suppressed')
+
+        def managerImpl = file('src/client/java/com/simibubi/create/client/flywheel/impl/visualization/VisualManagerImpl.java').text
+        if (!managerImpl.contains('IdentityHashMap') || !managerImpl.contains('Map<T, Action> pending'))
+            throw new GradleException('Port 20 regression: repeated visual transactions are no longer coalesced')
+
+        def iris = file('src/client/java/com/simibubi/create/client/flywheel/impl/compat/IrisCompat.java').text
+        if (!iris.contains('net.irisshaders.iris.api.v0.IrisApi') || !iris.contains('isShaderPackInUse'))
+            throw new GradleException('Port 20 regression: Iris shader-pack state detection is missing')
+        if (iris.contains('import net.irisshaders.'))
+            throw new GradleException('Port 20 regression: Iris compatibility has regained a hard compile-time dependency')
+
+        def sodium = file('src/client/java/com/simibubi/create/client/flywheel/impl/compat/SodiumCompat.java').text
+        if (!sodium.contains('BlockEntityRenderHandler') || !sodium.contains('Proxy.newProxyInstance'))
+            throw new GradleException('Port 20 regression: Sodium block-entity fallback integration is missing')
+        if (sodium.contains('import net.caffeinemc.mods.sodium.'))
+            throw new GradleException('Port 20 regression: Sodium compatibility has regained a hard compile-time dependency')
+
+        def codecs = file('src/main/java/com/simibubi/create/api/registry/CreateStreamCodecs.java').text
+        if (!codecs.contains('Identifier.STREAM_CODEC') || !codecs.contains('registryByName'))
+            throw new GradleException('Port 20 regression: stable-name Create registry networking helper is missing')
+
+        def itemAttribute = file('src/main/java/com/simibubi/create/content/logistics/item/filter/attribute/ItemAttribute.java').text
+        def packageTarget = file('src/main/java/com/simibubi/create/content/logistics/packagePort/PackagePortTarget.java').text
+        if (!itemAttribute.contains('CreateStreamCodecs.registryByName(CreateRegistries.ITEM_ATTRIBUTE_TYPE)'))
+            throw new GradleException('Port 20 regression: item attribute networking is not using stable registry names')
+        if (!packageTarget.contains('CreateStreamCodecs.registryByName(CreateRegistries.PACKAGE_PORT_TARGET_TYPE)'))
+            throw new GradleException('Port 20 regression: package target networking is not using stable registry names')
+
+        def create = file('src/main/java/com/simibubi/create/Create.java').text
+        if (!create.contains('public static final String ID = MOD_ID;') || !create.contains('Identifier asResource(String path)'))
+            throw new GradleException('Port 20 regression: upstream addon compatibility aliases are missing')
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyPort20StabilityCompatibility')
+}
+
+// Port.21 regression guard: Iris can toggle shader-pack state without a full
+// resource reload. Never suppress the vanilla/Sodium renderer while the active
+// Flywheel backend has become unsupported.
+tasks.register('verifyPort21IrisShaderFallback') {
+    doLast {
+        def manager = file('src/client/java/com/simibubi/create/client/flywheel/impl/visualization/VisualizationManagerImpl.java').text
+        if (!manager.contains('BackendManagerImpl.isVisualizationBackendAvailable()'))
+            throw new GradleException('Port 21 regression: visualization does not use the shader-safe runtime backend gate')
+
+        def backend = file('src/client/java/com/simibubi/create/client/flywheel/impl/BackendManagerImpl.java').text
+        if (!backend.contains('refreshForShaderPackState(ClientLevel level)'))
+            throw new GradleException('Port 21 regression: runtime Iris shader state transition handling is missing')
+        if (!backend.contains('ShadersModHelper.isShaderPackInUse()'))
+            throw new GradleException('Port 21 regression: backend manager is not checking current shader-pack state')
+        if (!backend.contains('VisualizationManagerImpl.reset(level)'))
+            throw new GradleException('Port 21 regression: shader transition does not reset stale Flywheel visuals')
+
+        def context = file('src/client/java/com/simibubi/create/client/flywheel/impl/event/RenderContextImpl.java').text
+        if (!context.contains('BackendManagerImpl.refreshForShaderPackState(level);'))
+            throw new GradleException('Port 21 regression: shader transition check is not performed at render update time')
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyPort21IrisShaderFallback')
+}
+
+// Port.22 regression guard: while an Iris shader pack is active, cached Create
+// block geometry must use vanilla moving-block RenderTypes that shader mods can
+// route correctly. Do not fall back to the Ponder/cardinal-lighting pipelines.
+tasks.register('verifyPort22IrisMovingBlockRenderFallback') {
+    doLast {
+        def source = file('src/client/java/com/simibubi/create/client/catnip/render/EntityBlockRenderType.java').text
+        if (!source.contains('BackendManagerImpl.isShaderPackInUseCached()'))
+            throw new GradleException('Port 22 regression: cached shader-aware entity block render type selection is missing')
+        ['RenderTypes.solidMovingBlock()', 'RenderTypes.cutoutMovingBlock()', 'RenderTypes.translucentMovingBlock()'].each { token ->
+            if (!source.contains(token))
+                throw new GradleException("Port 22 regression: missing vanilla shader-compatible moving-block render type ${token}")
+        }
+        if (!source.contains('shaderCompatibleMovingBlockType()'))
+            throw new GradleException('Port 22 regression: moving block shader fallback helper is missing')
+
+        def backend = file('src/client/java/com/simibubi/create/client/flywheel/impl/BackendManagerImpl.java').text
+        if (!backend.contains('isShaderPackInUseCached()'))
+            throw new GradleException('Port 22 regression: hot render paths no longer use cached shader-pack state')
+    }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyPort22IrisMovingBlockRenderFallback')
+}

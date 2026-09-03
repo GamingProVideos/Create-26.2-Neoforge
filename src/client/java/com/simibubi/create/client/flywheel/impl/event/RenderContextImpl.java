@@ -3,6 +3,7 @@ package com.simibubi.create.client.flywheel.impl.event;
 import com.simibubi.create.client.flywheel.api.backend.Engine.CrumblingBlock;
 import com.simibubi.create.client.flywheel.api.backend.RenderContext;
 import com.simibubi.create.client.flywheel.api.visualization.VisualizationManager;
+import com.simibubi.create.client.flywheel.impl.BackendManagerImpl;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
@@ -28,6 +29,10 @@ public class RenderContextImpl implements RenderContext {
     }
 
     public void update(@Nullable ClientLevel level, float partialTick) {
+        if (level != null) {
+            BackendManagerImpl.refreshForShaderPackState(level);
+        }
+
         visualizationManager = VisualizationManager.get(level);
         if (visualizationManager != null) {
             crumblingBlocks.clear();

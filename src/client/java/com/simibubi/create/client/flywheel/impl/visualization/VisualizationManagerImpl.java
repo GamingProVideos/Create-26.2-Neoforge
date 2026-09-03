@@ -13,6 +13,7 @@ import com.simibubi.create.client.flywheel.api.visualization.VisualManager;
 import com.simibubi.create.client.flywheel.api.visualization.VisualizationLevel;
 import com.simibubi.create.client.flywheel.api.visualization.VisualizationManager;
 import com.simibubi.create.client.flywheel.backend.engine.EngineImpl;
+import com.simibubi.create.client.flywheel.impl.BackendManagerImpl;
 import com.simibubi.create.client.flywheel.impl.FlwConfig;
 import com.simibubi.create.client.flywheel.impl.task.Flag;
 import com.simibubi.create.client.flywheel.impl.task.FlwTaskExecutor;
@@ -167,6 +168,20 @@ public class VisualizationManagerImpl implements VisualizationManager {
     @Contract("null -> false")
     public static boolean supportsVisualization(@Nullable LevelAccessor level) {
         if (!BackendManager.isBackendOn()) {
+            return false;
+        }
+
+        // Port 21: shader packs can be toggled at runtime without a full
+        // Minecraft resource reload. In that case BackendManager may still
+        // point at the previously selected Flywheel backend even though that
+        // backend has become unsupported (Iris shader pack active). Never let
+        // renderers suppress Minecraft/Sodium fallback rendering unless the
+        // CURRENT backend is actually usable right now.
+        //
+        // This is deliberately checked here because every Create renderer
+        // queries supportsVisualization() before deciding whether Flywheel or
+        // the normal block-entity renderer owns the block.
+        if (!BackendManagerImpl.isVisualizationBackendAvailable()) {
             return false;
         }
 

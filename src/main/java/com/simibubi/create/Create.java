@@ -51,9 +51,11 @@ import org.slf4j.Logger;
 @Mod(Create.MOD_ID)
 public class Create {
     public static final String MOD_ID = "create";
+    /** Upstream 1.21.1 compatibility alias used by many Create addons. */
+    public static final String ID = MOD_ID;
     public static final String NAME = "Create";
     public static final Logger LOGGER = LogUtils.getLogger();
-    public static final String VERSION = "6.0.10-port.16";
+    public static final String VERSION = "6.0.10-port.20";
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     public static boolean Lazy;
 
@@ -97,6 +99,17 @@ public class Create {
             event.getPackedOldPos(),
             event.getPackedNewPos()
         );
+    }
+
+
+    /**
+     * Upstream Create compatibility helper.
+     *
+     * <p>Minecraft 26.2 renamed ResourceLocation to Identifier, but keeping this
+     * helper lets source-ported addons continue to use Create.asResource(...).
+     */
+    public static Identifier asResource(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 
     public static void register() {

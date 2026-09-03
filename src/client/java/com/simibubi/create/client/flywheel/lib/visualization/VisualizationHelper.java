@@ -129,6 +129,15 @@ public final class VisualizationHelper {
         if (visualizer == null) {
             return false;
         }
+
+        VisualizationManager manager = VisualizationManager.get(blockEntity.getLevel());
+        if (manager == null || !manager.blockEntities().isVisualized(blockEntity)) {
+            // Having a registered visualizer is not enough. Only suppress the
+            // Minecraft renderer after Flywheel has successfully constructed a
+            // live visual for this exact block entity.
+            return false;
+        }
+
         return visualizer.skipVanillaRender(blockEntity);
     }
 
@@ -144,6 +153,12 @@ public final class VisualizationHelper {
         if (visualizer == null) {
             return false;
         }
+
+        VisualizationManager manager = VisualizationManager.get(entity.level());
+        if (manager == null || !manager.entities().isVisualized(entity)) {
+            return false;
+        }
+
         return visualizer.skipVanillaRender(entity);
     }
 
@@ -177,7 +192,12 @@ public final class VisualizationHelper {
         }
 
         manager.blockEntities().queueAdd(blockEntity);
-        return visualizer.skipVanillaRender(blockEntity);
+
+        // Keep the block entity in Minecraft/Sodium's normal render list as a
+        // safety net. Runtime extraction filters it out once a real Flywheel
+        // visual exists. If construction fails, the normal renderer remains
+        // available instead of the block becoming permanently invisible.
+        return false;
     }
 
     public static abstract class SkipIterator<T> implements Iterator<T> {

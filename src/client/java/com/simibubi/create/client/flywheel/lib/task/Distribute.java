@@ -2,6 +2,7 @@ package com.simibubi.create.client.flywheel.lib.task;
 
 import com.simibubi.create.client.flywheel.api.task.Plan;
 import com.simibubi.create.client.flywheel.api.task.TaskExecutor;
+import com.simibubi.create.client.flywheel.impl.FlwImpl;
 import com.simibubi.create.client.flywheel.lib.math.MoreMath;
 
 import java.util.Collections;
@@ -44,15 +45,18 @@ public final class Distribute {
 
         if (size <= sliceSize) {
             for (T t : list) {
-                action.accept(t, context);
+                runSafely(() -> action.accept(t, context));
             }
             onCompletion.run();
         } else if (sliceSize == 1) {
             var synchronizer = new Synchronizer(size, onCompletion);
             for (T t : list) {
                 taskExecutor.execute(() -> {
-                    action.accept(t, context);
-                    synchronizer.decrementAndEventuallyRun();
+                    try {
+                        runSafely(() -> action.accept(t, context));
+                    } finally {
+                        synchronizer.decrementAndEventuallyRun();
+                    }
                 });
             }
         } else {
@@ -66,10 +70,13 @@ public final class Distribute {
 
                 var subList = list.subList(start, end);
                 taskExecutor.execute(() -> {
-                    for (T t : subList) {
-                        action.accept(t, context);
+                    try {
+                        for (T t : subList) {
+                            runSafely(() -> action.accept(t, context));
+                        }
+                    } finally {
+                        synchronizer.decrementAndEventuallyRun();
                     }
-                    synchronizer.decrementAndEventuallyRun();
                 });
             }
         }
@@ -110,14 +117,17 @@ public final class Distribute {
         final int sliceSize = sliceSize(taskExecutor, size);
 
         if (size <= sliceSize) {
-            action.accept(list, context);
+            runSafely(() -> action.accept(list, context));
             onCompletion.run();
         } else if (sliceSize == 1) {
             var synchronizer = new Synchronizer(size, onCompletion);
             for (T t : list) {
                 taskExecutor.execute(() -> {
-                    action.accept(Collections.singletonList(t), context);
-                    synchronizer.decrementAndEventuallyRun();
+                    try {
+                        runSafely(() -> action.accept(Collections.singletonList(t), context));
+                    } finally {
+                        synchronizer.decrementAndEventuallyRun();
+                    }
                 });
             }
         } else {
@@ -131,8 +141,11 @@ public final class Distribute {
 
                 var subList = list.subList(start, end);
                 taskExecutor.execute(() -> {
-                    action.accept(subList, context);
-                    synchronizer.decrementAndEventuallyRun();
+                    try {
+                        runSafely(() -> action.accept(subList, context));
+                    } finally {
+                        synchronizer.decrementAndEventuallyRun();
+                    }
                 });
             }
         }
@@ -168,11 +181,11 @@ public final class Distribute {
 
         if (size <= sliceSize) {
             for (var t : plans) {
-                t.execute(taskExecutor, context, synchronizer);
+                executePlanSafely(t, taskExecutor, context, synchronizer);
             }
         } else if (sliceSize == 1) {
             for (var t : plans) {
-                taskExecutor.execute(() -> t.execute(taskExecutor, context, synchronizer));
+                taskExecutor.execute(() -> executePlanSafely(t, taskExecutor, context, synchronizer));
             }
         } else {
             int remaining = size;
@@ -185,10 +198,35 @@ public final class Distribute {
                 var subList = plans.subList(start, end);
                 taskExecutor.execute(() -> {
                     for (var t : subList) {
-                        t.execute(taskExecutor, context, synchronizer);
+                        executePlanSafely(t, taskExecutor, context, synchronizer);
                     }
                 });
             }
+        }
+    }
+
+    private static void runSafely(Runnable action) {
+        try {
+            action.run();
+        } catch (Exception | LinkageError e) {
+            // A single broken visual/addon task must not prevent the frame/tick
+            // completion signal from firing. Without this guard, one exception
+            // can leave Flywheel waiting forever and appear as a game freeze.
+            FlwImpl.LOGGER.error("Flywheel distributed task failed; continuing with remaining work", e);
+        }
+    }
+
+    private static <C> void executePlanSafely(
+        Plan<C> plan,
+        TaskExecutor taskExecutor,
+        C context,
+        Runnable onCompletion
+    ) {
+        try {
+            plan.execute(taskExecutor, context, onCompletion);
+        } catch (Exception | LinkageError e) {
+            FlwImpl.LOGGER.error("Flywheel plan failed before scheduling completion; continuing", e);
+            onCompletion.run();
         }
     }
 
